@@ -1,2 +1,7 @@
 [config]
 media_path = "./media"
+
+[extensions]
+image = ["jpg", "jpeg", "png", "gif", "bmp", "webp"]
+video = ["mp4", "mov", "avi", "mkv", "wmv", "webm" ]
+audio = ["mp3","wav","flac","wma","ogg" ]

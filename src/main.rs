@@ -6,7 +6,7 @@ use std::{fs, path::Path};
 
 use api::ApiKey;
 use catchers::*;
-use file::LavenderFile;
+use file::DataType;
 use image::{imageops, GenericImageView, ImageFormat};
 use rocket::http::Status;
 use toml::Value;
@@ -47,7 +47,7 @@ fn create_optimized_images(_key: ApiKey) -> &'static str {
 
         if let Some(ext) = path.extension() {
             let ext = ext.to_str().unwrap();
-            if LavenderFile::is_image(ext) {
+            if DataType::from_extension(ext).is_type(DataType::Image) {
                 let file_name = path.file_name().unwrap().to_str().unwrap();
                 let master_filename =
                     format!("{}_master.{}", file_name.split('.').next().unwrap(), ext);

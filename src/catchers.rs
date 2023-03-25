@@ -1,9 +1,11 @@
-use rocket::{request::Request, response::content::RawHtml};
+use rocket::response::content::RawHtml;
 
 macro_rules! html_error {
-    ($code:literal, $status:literal, $description:expr) => {
-        RawHtml(format!(
-"<!DOCTYPE html>
+    ($code:literal, $name:ident, $status:literal, $description:expr) => {
+        #[catch($code)]
+        pub fn $name() -> RawHtml<String> {
+            RawHtml(format!(
+                "<!DOCTYPE html>
 <html lang=\"en\">
     <head>
         <meta charset=\"utf-8\">
@@ -12,44 +14,33 @@ macro_rules! html_error {
     <body>
         <main>
             <h1>{0}: {1}</h1>
-            <p>{2}</p>
+            <code>{2}</code>
         <hr />
         </main>
     </body>
 </html>",
-            $code, $status, $description,
-        ))
+                $code, $status, $description,
+            ))
+        }
     };
 }
 
-#[catch(400)]
-pub fn bad_request() -> RawHtml<String> {
-    html_error!(
-        400,
-        "Bad Request",
-        "The request could not be understood by the server due to malformed syntax."
-    )
-}
-
-#[catch(401)]
-pub fn unauthorized() -> RawHtml<String> {
-    html_error!(
-        401,
-        "Unauthorized",
-        "The request requires user authentication."
-    )
-}
-
-#[catch(404)]
-pub fn not_found(req: &Request) -> RawHtml<String> {
-    html_error!(
-        404,
-        "Not Found",
-        format!("The route <code>{}</code> could not be found.", req.uri())
-    )
-}
-
-#[catch(500)]
-pub fn internal_server_error() -> RawHtml<String> {
-    html_error!(500, "Internal Server Error", "The server encountered an internal error or misconfiguration and was unable to complete your request.")
-}
+html_error!(
+    400,
+    bad_request,
+    "Bad Request",
+    "The request could not be understood by the server due to malformed syntax."
+);
+html_error!(
+    401,
+    unauthorized,
+    "Unauthorized",
+    "The request requires user authentication."
+);
+html_error!(
+    404,
+    not_found,
+    "Not Found",
+    "The requested resource could not be found."
+);
+html_error!(500, internal_server_error, "Internal Server Error", "The server encountered an internal error or misconfiguration and was unable to complete your request.");

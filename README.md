@@ -7,7 +7,7 @@ Lavender is written 100% in **[Rust](https://www.rust-lang.org/)** using the [Ro
 ## Features
 * Get any image from a specified directory on the server as a Base64 encoded string, useful for a constantly changing gallery of media. Static and often requested images stay at the frontend of course.
 
-This has to be configured in a [`lavender.toml`](./lavender.toml) file.
+* Configurable stuff in a [`lavender.toml`](./lavender.toml) file
 
 * A helper route that optimizes all of the images from a specified directory, it only works when providing the right API key though.
 
