@@ -58,7 +58,6 @@ pub async fn get_latest_files(count: Option<usize>, master: bool) -> Result<Stri
     entries.sort_by(|(_, t1), (_, t2)| t2.cmp(t1));
     let count = count.unwrap_or(1).min(entries.len());
     entries.truncate(count);
-    dbg!(&entries);
 
     let mut output = String::new();
 
