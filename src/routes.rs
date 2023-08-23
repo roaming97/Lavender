@@ -25,15 +25,12 @@ pub async fn get_latest_files(count: Option<usize>, master: bool) -> Result<Stri
     let mut entries: Vec<_> = match std::fs::read_dir(&media_path) {
         Ok(entries) => entries
             .filter_map(|e| {
-                let entry = match e {
-                    Ok(e) => e,
-                    Err(_) => return None,
-                };
                 /*
                 One cannot rely on master images directly, since they can be created
                 way after the original versions were, so let's filter those out and
                 add the master suffix later. This returns more accurate file sorting.
                 */
+                let entry = e.ok()?;
                 if entry.metadata().ok()?.is_file()
                     && !entry.path().to_str().unwrap().contains("_master.png")
                 {
