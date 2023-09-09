@@ -1,7 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use crate::api::ApiKey;
 use crate::file;
+use crate::{api::ApiKey, file::LavenderFile};
 use image::{imageops, GenericImageView, ImageFormat};
 use rocket::http::Status;
 
@@ -19,33 +19,59 @@ pub async fn get_file(path: &str, name_only: bool) -> Result<String, Status> {
     }
 }
 
+#[get("/amount")]
+pub async fn file_amount() -> Result<String, Status> {
+    match std::fs::read_dir(file::get_media_path()) {
+        Ok(dir) => {
+            let v: Vec<std::fs::DirEntry> = dir
+                .filter_map(|e| {
+                    let entry = e.ok()?;
+                    let file = LavenderFile::new(entry.path().as_path()).unwrap();
+                    if file.datatype.is_image()
+                        && entry
+                            .path()
+                            .to_string_lossy()
+                            .contains(file::MASTER_FILE_SUFFIX)
+                    {
+                        None
+                    } else {
+                        Some(entry) 
+                    }
+                })
+                .collect();
+            Ok(v.len().to_string())
+        }
+        Err(_) => Err(Status::BadRequest),
+    }
+}
+
+// TODO: There must be a way I can manually input metadata for the files.
+// Once that is done I could separate them by categories and write their original
+// creation dates, skipping in the process the master suffix step.
 #[get("/latest?<count>&<master>")]
 pub async fn get_latest_files(count: Option<usize>, master: bool) -> Result<String, Status> {
     let media_path = file::get_media_path();
     let mut entries: Vec<_> = match std::fs::read_dir(&media_path) {
         Ok(entries) => entries
             .filter_map(|e| {
+                let entry = e.ok()?;
+                let mut path = entry.path();
+                let datatype = file::DataType::from_extension(path.extension()?.to_str()?);
+                let metadata = entry.metadata().ok()?;
+                let modified = metadata.modified().ok()?;
                 /*
                 One cannot rely on master images directly, since they can be created
                 way after the original versions were, so let's filter those out and
                 add the master suffix later. This returns more accurate file sorting.
                 */
-                let entry = e.ok()?;
-                if entry.metadata().ok()?.is_file()
-                    && !entry.path().to_str().unwrap().contains("_master.png")
+                if metadata.is_file() && !path.to_string_lossy().contains(file::MASTER_FILE_SUFFIX)
                 {
-                    let metadata = entry.metadata().ok()?;
-                    let modified = metadata.modified().ok()?;
-                    let path = if master {
-                        PathBuf::from(
-                            entry
-                                .path()
-                                .to_string_lossy()
-                                .replace(".png", "_master.png"),
-                        )
-                    } else {
-                        entry.path()
-                    };
+                    if datatype.is_image() && master {
+                        path = path
+                            .to_string_lossy()
+                            .replace(".png", &format!("{}.png", file::MASTER_FILE_SUFFIX))
+                            .into();
+                    }
                     Some((path, modified))
                 } else {
                     None

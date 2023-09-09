@@ -5,11 +5,13 @@ use toml::Value;
 use base64::engine::{GeneralPurpose, GeneralPurposeConfig};
 use base64::{alphabet, Engine};
 
+pub const MASTER_FILE_SUFFIX: &str = "_master.";
+
 #[derive(Debug)]
 pub struct LavenderFile {
     buffer: Vec<u8>,
-    datatype: DataType,
     extension: String,
+    pub datatype: DataType,
 }
 
 #[derive(Debug, PartialEq)]
@@ -45,7 +47,7 @@ impl DataType {
     }
 
     fn is_type(&self, datatype: DataType) -> bool {
-        self == &datatype
+        self.eq(&datatype)
     }
 
     /// Determines if the data type belongs to an image file.
@@ -85,7 +87,7 @@ impl LavenderFile {
             Ok(b) => b,
             Err(e) => {
                 return Err(format!(
-                    "File \'{}\' not found!: {}",
+                    "Could not read file \'{}\': {}",
                     path.to_string_lossy(),
                     e
                 ));
