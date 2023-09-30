@@ -1,9 +1,10 @@
-use std::path::Path;
+use std::fs;
+use std::path;
 
 use crate::file;
-use crate::{api::ApiKey, file::LavenderFile};
 use image::{imageops, GenericImageView, ImageFormat};
 use rocket::http::Status;
+use walkdir::WalkDir;
 
 #[get("/file?<path>&<name_only>")]
 pub async fn get_file(path: &str, name_only: bool) -> Result<String, Status> {
@@ -12,7 +13,7 @@ pub async fn get_file(path: &str, name_only: bool) -> Result<String, Status> {
     }
 
     let filepath = format!("{}/{}", &file::get_media_path(), path);
-    let dir = Path::new(&filepath);
+    let dir = path::Path::new(&filepath);
     match file::LavenderFile::new(dir) {
         Ok(f) => Ok(f.read_base64()),
         Err(_) => Err(Status::BadRequest),
@@ -20,56 +21,58 @@ pub async fn get_file(path: &str, name_only: bool) -> Result<String, Status> {
 }
 
 #[get("/amount")]
-pub async fn file_amount() -> Result<String, Status> {
-    match std::fs::read_dir(file::get_media_path()) {
-        Ok(dir) => {
-            let v: Vec<std::fs::DirEntry> = dir
-                .filter_map(|e| {
-                    let entry = e.ok()?;
-                    let file = LavenderFile::new(entry.path().as_path()).unwrap();
-                    if file.datatype.is_image()
-                        && entry
-                            .path()
-                            .to_string_lossy()
-                            .contains(file::MASTER_FILE_SUFFIX)
-                    {
-                        None
-                    } else {
-                        Some(entry) 
-                    }
-                })
-                .collect();
-            Ok(v.len().to_string())
-        }
-        Err(_) => Err(Status::BadRequest),
-    }
+pub async fn file_amount() -> String {
+    let v: Vec<walkdir::DirEntry> = WalkDir::new(file::get_media_path())
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            e.file_type().is_file()
+                && e.file_name()
+                    .to_str()
+                    .map(|s| !s.starts_with('.') && !s.contains(file::MASTER_FILE_SUFFIX))
+                    .unwrap_or(false)
+        })
+        .collect();
+
+    v.len().to_string()
 }
 
-// TODO: There must be a way I can manually input metadata for the files.
-// Once that is done I could separate them by categories and write their original
-// creation dates, skipping in the process the master suffix step.
-#[get("/latest?<count>&<master>")]
-pub async fn get_latest_files(count: Option<usize>, master: bool) -> Result<String, Status> {
-    let media_path = file::get_media_path();
-    let mut entries: Vec<_> = match std::fs::read_dir(&media_path) {
+#[get("/latest?<count>&<relpath>&<master>")]
+pub async fn get_latest_files(
+    count: Option<usize>,
+    relpath: Option<&str>,
+    master: bool,
+) -> Result<String, Status> {
+    let path = format!(
+        "{}{}{}",
+        file::get_media_path(),
+        path::MAIN_SEPARATOR,
+        relpath.unwrap_or_default()
+    );
+    let mut entries: Vec<_> = match fs::read_dir(path) {
         Ok(entries) => entries
             .filter_map(|e| {
                 let entry = e.ok()?;
                 let mut path = entry.path();
-                let datatype = file::DataType::from_extension(path.extension()?.to_str()?);
+                let extension = path.extension()?.to_str()?;
+                let datatype = file::DataType::from_extension(extension);
                 let metadata = entry.metadata().ok()?;
                 let modified = metadata.modified().ok()?;
                 /*
-                One cannot rely on master images directly, since they can be created
-                way after the original versions were, so let's filter those out and
-                add the master suffix later. This returns more accurate file sorting.
+                One cannot rely on master images directly since they can be created
+                anytime differing with the original files' dates, so let's filter those
+                out and add the master suffix later.
+                This helps the later date sorting to be more accurate.
                 */
                 if metadata.is_file() && !path.to_string_lossy().contains(file::MASTER_FILE_SUFFIX)
                 {
                     if datatype.is_image() && master {
                         path = path
                             .to_string_lossy()
-                            .replace(".png", &format!("{}.png", file::MASTER_FILE_SUFFIX))
+                            .replace(
+                                &format!(".{}", extension),
+                                &format!("{}{}", file::MASTER_FILE_SUFFIX, extension),
+                            )
                             .into();
                     }
                     Some((path, modified))
@@ -88,6 +91,7 @@ pub async fn get_latest_files(count: Option<usize>, master: bool) -> Result<Stri
     let mut output = String::new();
 
     for (path, _) in entries {
+        println!("{}", path.to_str().unwrap());
         if let Ok(f) = file::LavenderFile::new(path.as_path()) {
             output.push_str(&format!("{}\n", f.read_base64()));
         } else {
@@ -99,10 +103,10 @@ pub async fn get_latest_files(count: Option<usize>, master: bool) -> Result<Stri
 }
 
 #[get("/optimize")]
-pub fn create_optimized_images(_key: ApiKey) -> &'static str {
+pub fn create_optimized_images(_key: crate::api::ApiKey) -> &'static str {
     let path = file::get_media_path();
-    let dir = Path::new(&path);
-    for entry in std::fs::read_dir(dir).expect("Could not read path to optimize images!") {
+    let dir = path::Path::new(&path);
+    for entry in fs::read_dir(dir).expect("Could not read path to optimize images!") {
         let entry = entry.unwrap();
         let path = entry.path();
 
@@ -130,7 +134,7 @@ pub fn create_optimized_images(_key: ApiKey) -> &'static str {
                                 "{}_master.png",
                                 path.file_stem().unwrap().to_string_lossy()
                             );
-                            let new_path = std::path::Path::new(dir).join(new_filename);
+                            let new_path = path::Path::new(dir).join(new_filename);
                             img.save_with_format(new_path, ImageFormat::Png).unwrap();
                         }
                     }

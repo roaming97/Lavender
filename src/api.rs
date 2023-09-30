@@ -5,6 +5,7 @@ use rocket::{
 use sha3::{Digest, Sha3_256};
 use std::env;
 
+// TODO: get rid of this `private_in_public` lint removal warning.
 #[derive(Debug, PartialEq, FromForm)]
 pub struct ApiKey<'r>(&'r str);
 
@@ -28,13 +29,9 @@ impl<'r> FromRequest<'r> for ApiKey<'r> {
             }
         };
 
-        fn is_valid(key: &str, hash: &str) -> bool {
-            format!("{:x}", Sha3_256::digest(key.as_bytes())) == hash
-        }
-
         match req.headers().get_one("x-api-key") {
             Some(k) => {
-                if is_valid(k, &hash) {
+                if format!("{:x}", Sha3_256::digest(k.as_bytes())) == hash {
                     Outcome::Success(ApiKey(k))
                 } else {
                     Outcome::Failure((Status::Unauthorized, ApiKeyError::Invalid))

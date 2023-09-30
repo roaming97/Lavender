@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, MAIN_SEPARATOR_STR};
 use toml::Value;
 
 use base64::engine::{GeneralPurpose, GeneralPurposeConfig};
@@ -83,7 +83,7 @@ impl DataType {
 impl LavenderFile {
     /// Creates a new media file.
     pub fn new(path: &Path) -> Result<Self, String> {
-        let buffer = match std::fs::read(path) {
+        let buffer = match fs::read(path) {
             Ok(b) => b,
             Err(e) => {
                 return Err(format!(
@@ -124,5 +124,9 @@ pub fn get_media_path() -> String {
         .parse()
         .unwrap();
     let config = toml_file["config"].as_table().unwrap();
-    String::from(config["media_path"].as_str().unwrap())
+
+    config["media_path"]
+        .as_str()
+        .unwrap()
+        .replace('/', MAIN_SEPARATOR_STR)
 }
