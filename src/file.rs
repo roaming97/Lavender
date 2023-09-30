@@ -10,7 +10,6 @@ pub const MASTER_FILE_SUFFIX: &str = "_master.";
 #[derive(Debug)]
 pub struct LavenderFile {
     buffer: Vec<u8>,
-    extension: String,
     pub datatype: DataType,
 }
 
@@ -97,11 +96,7 @@ impl LavenderFile {
         if let Some(ext) = path.extension() {
             let extension = ext.to_string_lossy().to_ascii_lowercase();
             let datatype = DataType::from_extension(extension.as_str());
-            return Ok(Self {
-                extension,
-                datatype,
-                buffer,
-            });
+            return Ok(Self { buffer, datatype });
         };
         Err("Invalid file extension!".to_string())
     }
@@ -109,12 +104,7 @@ impl LavenderFile {
     /// Reads a media file and returns an HTML-friendly data `base64` string.
     pub fn read_base64(&self) -> String {
         let engine = GeneralPurpose::new(&alphabet::STANDARD, GeneralPurposeConfig::default());
-        format!(
-            "data:{}/{};base64,{}",
-            self.datatype.get_name(),
-            self.extension,
-            engine.encode(&self.buffer)
-        )
+        engine.encode(&self.buffer)
     }
 }
 

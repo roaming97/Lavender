@@ -2,6 +2,8 @@ mod api;
 mod catchers;
 mod file;
 mod routes;
+#[cfg(test)]
+mod tests;
 
 use catchers::*;
 use routes::*;
