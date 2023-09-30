@@ -5,8 +5,7 @@ use rocket::{
 use sha3::{Digest, Sha3_256};
 use std::env;
 
-// TODO: get rid of this `private_in_public` lint removal warning.
-#[derive(Debug, PartialEq, FromForm)]
+#[derive(Debug, PartialEq)]
 pub struct ApiKey<'r>(&'r str);
 
 #[derive(Debug)]
