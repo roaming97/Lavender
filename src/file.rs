@@ -7,10 +7,9 @@ use base64::{alphabet, Engine};
 
 pub const MASTER_FILE_SUFFIX: &str = "_master.";
 
-#[derive(Debug)]
 pub struct LavenderFile {
     buffer: Vec<u8>,
-    pub datatype: DataType,
+    datatype: DataType,
 }
 
 #[derive(Debug, PartialEq)]
@@ -45,60 +44,30 @@ impl DataType {
         }
     }
 
-    fn is_type(&self, datatype: DataType) -> bool {
+    pub fn is_type(&self, datatype: DataType) -> bool {
         self.eq(&datatype)
-    }
-
-    /// Determines if the data type belongs to an image file.
-    pub fn is_image(&self) -> bool {
-        self.is_type(DataType::Image)
-    }
-
-    /// Determines if the data type belongs to an audio file.
-    pub fn is_audio(&self) -> bool {
-        self.is_type(DataType::Audio)
-    }
-
-    /// Determines if the data type belongs to a video file.
-    pub fn is_video(&self) -> bool {
-        self.is_type(DataType::Video)
-    }
-
-    /// Determines if the data type is unknown.
-    pub fn is_unknown(&self) -> bool {
-        self.is_type(DataType::Unknown)
-    }
-
-    fn get_name(&self) -> &'static str {
-        match self {
-            Self::Image => "image",
-            Self::Video => "video",
-            Self::Audio => "audio",
-            Self::Unknown => "unknown",
-        }
     }
 }
 
 impl LavenderFile {
     /// Creates a new media file.
-    pub fn new(path: &Path) -> Result<Self, String> {
-        let buffer = match fs::read(path) {
-            Ok(b) => b,
-            Err(e) => {
-                return Err(format!(
-                    "Could not read file \'{}\': {}",
-                    path.to_string_lossy(),
-                    e
-                ));
-            }
+    pub fn new<P>(path: P) -> Self
+    where
+        P: AsRef<Path>,
+    {
+        let buffer = fs::read(&path).ok().unwrap_or_default();
+        let datatype = match path.as_ref().extension() {
+            Some(ext) => DataType::from_extension(ext.to_ascii_lowercase().to_str().unwrap()),
+            None => DataType::Unknown,
         };
+        Self { buffer, datatype }
+    }
 
-        if let Some(ext) = path.extension() {
-            let extension = ext.to_string_lossy().to_ascii_lowercase();
-            let datatype = DataType::from_extension(extension.as_str());
-            return Ok(Self { buffer, datatype });
-        };
-        Err("Invalid file extension!".to_string())
+    /// Ckecks that:
+    /// * The file's buffer is not empty.
+    /// * The file's data type is unknown.
+    pub fn is_valid(&self) -> bool {
+        !self.buffer.is_empty() && !self.datatype.is_type(DataType::Unknown)
     }
 
     /// Reads a media file and returns an HTML-friendly data `base64` string.

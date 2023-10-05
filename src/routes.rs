@@ -11,12 +11,12 @@ pub async fn get_file(path: &str, name_only: bool) -> Result<String, Status> {
     if name_only {
         return Ok(path.split('/').last().unwrap().to_owned());
     }
-
     let filepath = format!("{}/{}", &file::get_media_path(), path);
-    let dir = path::Path::new(&filepath);
-    match file::LavenderFile::new(dir) {
-        Ok(f) => Ok(f.read_base64()),
-        Err(_) => Err(Status::BadRequest),
+    let file = file::LavenderFile::new(filepath);
+    if file.is_valid() {
+        Ok(file.read_base64())
+    } else {
+        Err(Status::BadRequest)
     }
 }
 
@@ -66,7 +66,7 @@ pub async fn get_latest_files(
                 */
                 if metadata.is_file() && !path.to_string_lossy().contains(file::MASTER_FILE_SUFFIX)
                 {
-                    if datatype.is_image() && master {
+                    if datatype.is_type(file::DataType::Image) && master {
                         path = path
                             .to_string_lossy()
                             .replace(
@@ -92,7 +92,8 @@ pub async fn get_latest_files(
 
     for (path, _) in entries {
         println!("{}", path.to_str().unwrap());
-        if let Ok(f) = file::LavenderFile::new(path.as_path()) {
+        let f = file::LavenderFile::new(path);
+        if f.is_valid() {
             output.push_str(&format!("{}\n", f.read_base64()));
         } else {
             return Err(Status::BadRequest);
@@ -112,13 +113,15 @@ pub fn create_optimized_images(_key: crate::api::ApiKey) -> &'static str {
 
         if let Some(ext) = path.extension() {
             let ext = ext.to_str().unwrap();
-            if file::DataType::from_extension(ext).is_image() {
+            if file::DataType::from_extension(ext).is_type(file::DataType::Image) {
                 let file_name = path.file_name().unwrap().to_str().unwrap();
                 let master_filename =
                     format!("{}_master.{}", file_name.split('.').next().unwrap(), ext);
                 let target_path = dir.join(master_filename);
 
-                if target_path.exists() || file_name.contains("_master.png") {
+                if target_path.exists()
+                    || file_name.contains(&format!("{}{}", file::MASTER_FILE_SUFFIX, ext))
+                {
                     continue;
                 }
 
@@ -138,7 +141,11 @@ pub fn create_optimized_images(_key: crate::api::ApiKey) -> &'static str {
                             img.save_with_format(new_path, ImageFormat::Png).unwrap();
                         }
                     }
-                    Err(e) => println!("File \'{:?}\' not found!: {:?}", entry.path(), e),
+                    Err(e) => println!(
+                        "File \'{}\' not found!: {}",
+                        entry.path().to_str().unwrap(),
+                        e
+                    ),
                 }
             }
         }
