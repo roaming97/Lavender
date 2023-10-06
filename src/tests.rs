@@ -110,3 +110,10 @@ fn multiple_latest_files_test_dir() {
         assert!(test_base64_str(data));
     }
 }
+
+#[test]
+fn optimize_images() {
+    let client = Client::untracked(rocket()).expect("Valid rocket.rs instance");
+    let response = client.get(uri!(super::create_optimized_images)).dispatch();
+    assert_eq!(response.status(), Status::Ok);
+}

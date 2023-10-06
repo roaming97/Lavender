@@ -1,10 +1,11 @@
 use std::fs;
 use std::path;
+use std::path::MAIN_SEPARATOR;
 
 use crate::file;
+use crate::file::MASTER_FILE_SUFFIX;
 use image::{imageops, GenericImageView, ImageFormat};
 use rocket::http::Status;
-use walkdir::WalkDir;
 
 #[get("/file?<path>&<name_only>")]
 pub async fn get_file(path: &str, name_only: bool) -> Result<String, Status> {
@@ -22,18 +23,7 @@ pub async fn get_file(path: &str, name_only: bool) -> Result<String, Status> {
 
 #[get("/amount")]
 pub async fn file_amount() -> String {
-    let v: Vec<walkdir::DirEntry> = WalkDir::new(file::get_media_path())
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| {
-            e.file_type().is_file()
-                && e.file_name()
-                    .to_str()
-                    .map(|s| !s.starts_with('.') && !s.contains(file::MASTER_FILE_SUFFIX))
-                    .unwrap_or(false)
-        })
-        .collect();
-
+    let v = file::get_all_files_recursively();
     v.len().to_string()
 }
 
@@ -104,52 +94,46 @@ pub async fn get_latest_files(
 }
 
 #[get("/optimize")]
-pub fn create_optimized_images(_key: crate::api::ApiKey) -> &'static str {
-    let path = file::get_media_path();
-    let dir = path::Path::new(&path);
-    for entry in fs::read_dir(dir).expect("Could not read path to optimize images!") {
-        let entry = entry.unwrap();
+pub fn create_optimized_images(_key: crate::api::ApiKey) -> Status {
+    let v = file::get_all_files_recursively();
+    for entry in v {
         let path = entry.path();
-
-        if let Some(ext) = path.extension() {
-            let ext = ext.to_str().unwrap();
-            if file::DataType::from_extension(ext).is_type(file::DataType::Image) {
-                let file_name = path.file_name().unwrap().to_str().unwrap();
-                let master_filename =
-                    format!("{}_master.{}", file_name.split('.').next().unwrap(), ext);
-                let target_path = dir.join(master_filename);
-
-                if target_path.exists()
-                    || file_name.contains(&format!("{}{}", file::MASTER_FILE_SUFFIX, ext))
-                {
-                    continue;
-                }
-
-                match image::open(&path) {
-                    Ok(i) => {
-                        let (width, height) = i.dimensions();
-                        if width > 640 || height > 640 {
-                            let nwidth = (width as f32 * 0.25) as u32;
-                            let nheight = (height as f32 * 0.25) as u32;
-                            println!("Loaded image with size: {}x{}", nwidth, nheight);
-                            let img = i.resize(nwidth, nheight, imageops::FilterType::CatmullRom);
-                            let new_filename = format!(
-                                "{}_master.png",
-                                path.file_stem().unwrap().to_string_lossy()
-                            );
-                            let new_path = path::Path::new(dir).join(new_filename);
-                            img.save_with_format(new_path, ImageFormat::Png).unwrap();
-                        }
+        let parent = path.parent().unwrap().to_str().unwrap();
+        let filename = path.file_stem().unwrap().to_str().unwrap();
+        let extension = path.extension().unwrap().to_str().unwrap();
+        if !file::DataType::from_extension(extension.to_ascii_lowercase().as_str())
+            .is_type(file::DataType::Image)
+        {
+            continue;
+        }
+        let target = format!(
+            "{}{}{}{}{}",
+            parent, MAIN_SEPARATOR, filename, MASTER_FILE_SUFFIX, extension
+        );
+        dbg!(&target);
+        if path::Path::new(&target).exists() {
+            continue;
+        } else {
+            match image::open(path) {
+                Ok(i) => {
+                    let (w, h) = i.dimensions();
+                    if w > 640 || h > 640 {
+                        let nwidth = (w as f32 * 0.25) as u32;
+                        let nheight = (h as f32 * 0.25) as u32;
+                        let img = i.resize(nwidth, nheight, imageops::FilterType::CatmullRom);
+                        img.save_with_format(target, ImageFormat::Png).unwrap();
                     }
-                    Err(e) => println!(
-                        "File \'{}\' not found!: {}",
+                }
+                Err(e) => {
+                    println!(
+                        "Failed to open \'{}\': {}",
                         entry.path().to_str().unwrap(),
                         e
-                    ),
+                    );
+                    return Status::InternalServerError;
                 }
             }
         }
     }
-
-    "Done"
+    Status::Ok
 }

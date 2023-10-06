@@ -4,6 +4,7 @@ use toml::Value;
 
 use base64::engine::{GeneralPurpose, GeneralPurposeConfig};
 use base64::{alphabet, Engine};
+use walkdir::WalkDir;
 
 pub const MASTER_FILE_SUFFIX: &str = "_master.";
 
@@ -51,10 +52,7 @@ impl DataType {
 
 impl LavenderFile {
     /// Creates a new media file.
-    pub fn new<P>(path: P) -> Self
-    where
-        P: AsRef<Path>,
-    {
+    pub fn new<P: AsRef<Path>>(path: P) -> Self {
         let buffer = fs::read(&path).ok().unwrap_or_default();
         let datatype = match path.as_ref().extension() {
             Some(ext) => DataType::from_extension(ext.to_ascii_lowercase().to_str().unwrap()),
@@ -77,15 +75,42 @@ impl LavenderFile {
     }
 }
 
-pub fn get_media_path() -> String {
+fn get_toml_config_value(value: &str) -> Option<String> {
     let toml_file: Value = fs::read_to_string("lavender.toml")
         .unwrap()
         .parse()
         .unwrap();
     let config = toml_file["config"].as_table().unwrap();
+    match config[value].as_str() {
+        Some(v) => Some(v.to_owned()),
+        None => panic!(
+            "{} variable not found in Lavender configuration file!",
+            value
+        ),
+    }
+}
 
-    config["media_path"]
-        .as_str()
+pub fn get_media_path() -> String {
+    get_toml_config_value("media_path")
         .unwrap()
         .replace('/', MAIN_SEPARATOR_STR)
+}
+
+pub fn get_api_key() -> Option<String> {
+    get_toml_config_value("api_key")
+}
+
+pub fn get_all_files_recursively() -> Vec<walkdir::DirEntry> {
+    WalkDir::new(get_media_path())
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            e.file_type().is_file()
+                && e.path().extension().is_some()
+                && e.file_name()
+                    .to_str()
+                    .map(|s| !s.starts_with('.') && !s.contains(MASTER_FILE_SUFFIX))
+                    .unwrap_or(false)
+        })
+        .collect()
 }

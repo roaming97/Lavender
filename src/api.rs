@@ -5,8 +5,10 @@ use rocket::{
 use sha3::{Digest, Sha3_256};
 use std::env;
 
+use crate::file::get_api_key;
+
 #[derive(Debug, PartialEq)]
-pub struct ApiKey<'r>(&'r str);
+pub struct ApiKey(String);
 
 #[derive(Debug)]
 pub enum ApiKeyError {
@@ -16,10 +18,10 @@ pub enum ApiKeyError {
 }
 
 #[rocket::async_trait]
-impl<'r> FromRequest<'r> for ApiKey<'r> {
+impl<'r> FromRequest<'r> for ApiKey {
     type Error = ApiKeyError;
 
-    async fn from_request(req: &'r Request<'_>) -> Outcome<Self, Self::Error> {
+    async fn from_request(_req: &'r Request<'_>) -> Outcome<Self, Self::Error> {
         let hash = match env::var("LAVENDER_API_HASH") {
             Ok(s) => s,
             Err(_) => {
@@ -28,14 +30,11 @@ impl<'r> FromRequest<'r> for ApiKey<'r> {
             }
         };
 
-        match req.headers().get_one("x-api-key") {
-            Some(k) => {
-                if format!("{:x}", Sha3_256::digest(k.as_bytes())) == hash {
-                    Outcome::Success(ApiKey(k))
-                } else {
-                    Outcome::Failure((Status::Unauthorized, ApiKeyError::Invalid))
-                }
+        match get_api_key() {
+            Some(k) if format!("{:x}", Sha3_256::digest(k.as_bytes())) == hash => {
+                Outcome::Success(ApiKey(k))
             }
+            Some(_) => Outcome::Failure((Status::Unauthorized, ApiKeyError::Invalid)),
             None => Outcome::Failure((Status::Unauthorized, ApiKeyError::Missing)),
         }
     }

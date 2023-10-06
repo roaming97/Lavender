@@ -11,6 +11,6 @@ Lavender is written 100% in **[Rust](https://www.rust-lang.org/)** using the [Ro
 
 * Get the total amount of files in the media directory recursively.
 
-* Configurable settings in a [`lavender.toml`](./lavender.toml) file, such as the specified directory where to look for media, extension settings, and more to be added.
+* Configurable settings in a [`lavender.toml`](./lavender.toml) file, such as the specified directory where to look for media, extension settings, API key, and more to be added.
 
 * A helper route that optimizes all of the images from a specified directory, it only works when providing the right API key though. (This has to be configured by adding a `LAVENDER_API_HASH` environment variable when running the program or to the system's environment variables.)
