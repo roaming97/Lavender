@@ -1,3 +1,4 @@
+use num_traits::{FromPrimitive, PrimInt};
 use std::fs;
 use std::path::{Path, MAIN_SEPARATOR_STR};
 use toml::Value;
@@ -11,43 +12,6 @@ pub const MASTER_FILE_SUFFIX: &str = "_master.";
 pub struct LavenderFile {
     buffer: Vec<u8>,
     datatype: DataType,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum DataType {
-    Image,
-    Video,
-    Audio,
-    Unknown,
-}
-
-#[allow(dead_code)]
-impl DataType {
-    pub fn from_extension(extension: &str) -> Self {
-        // Read the TOML file
-        let toml_str = fs::read_to_string("lavender.toml").unwrap();
-        let toml: Value = toml::from_str(&toml_str).unwrap();
-
-        // Extract the extension lists from the TOML file
-        let image_exts = toml["extensions"]["image"].as_array().unwrap();
-        let video_exts = toml["extensions"]["video"].as_array().unwrap();
-        let audio_exts = toml["extensions"]["audio"].as_array().unwrap();
-
-        // Match against the extension lists
-        if image_exts.contains(&Value::from(extension)) {
-            Self::Image
-        } else if video_exts.contains(&Value::from(extension)) {
-            Self::Video
-        } else if audio_exts.contains(&Value::from(extension)) {
-            Self::Audio
-        } else {
-            Self::Unknown
-        }
-    }
-
-    pub fn is_type(&self, datatype: DataType) -> bool {
-        self.eq(&datatype)
-    }
 }
 
 impl LavenderFile {
@@ -75,29 +39,79 @@ impl LavenderFile {
     }
 }
 
-fn get_toml_config_value(value: &str) -> Option<String> {
-    let toml_file: Value = fs::read_to_string("lavender.toml")
-        .unwrap()
-        .parse()
-        .unwrap();
-    let config = toml_file["config"].as_table().unwrap();
-    match config[value].as_str() {
-        Some(v) => Some(v.to_owned()),
-        None => panic!(
-            "{} variable not found in Lavender configuration file!",
-            value
-        ),
+#[derive(Debug, PartialEq)]
+pub enum DataType {
+    Image,
+    Video,
+    Audio,
+    Unknown,
+}
+
+impl DataType {
+    pub fn from_extension(extension: &str) -> Self {
+        let toml = LavenderTOML::new();
+
+        let image_exts = toml.get_array_value("extensions", "image").unwrap();
+        let video_exts = toml.get_array_value("extensions", "video").unwrap();
+        let audio_exts = toml.get_array_value("extensions", "audio").unwrap();
+
+        // Match against the extension lists
+        if image_exts.contains(&Value::from(extension)) {
+            Self::Image
+        } else if video_exts.contains(&Value::from(extension)) {
+            Self::Video
+        } else if audio_exts.contains(&Value::from(extension)) {
+            Self::Audio
+        } else {
+            Self::Unknown
+        }
+    }
+
+    pub fn is_type(&self, datatype: DataType) -> bool {
+        self.eq(&datatype)
+    }
+}
+
+pub struct LavenderTOML(Value);
+
+impl LavenderTOML {
+    pub fn new() -> Self {
+        let toml_file: Value = fs::read_to_string("lavender.toml")
+            .unwrap()
+            .parse()
+            .unwrap();
+        Self(toml_file)
+    }
+
+    pub fn get_string_value(&self, table: &str, value: &str) -> Option<String> {
+        let t = self.0[table].as_table().unwrap();
+        t[value].as_str().map(|v| v.to_owned())
+    }
+
+    #[allow(dead_code)]
+    pub fn get_number_value<T: PrimInt + FromPrimitive>(
+        &self,
+        table: &str,
+        value: &str,
+    ) -> Option<T> {
+        let t = self.0[table].as_table().unwrap();
+        match t[value].as_integer() {
+            Some(n) => FromPrimitive::from_i64(n),
+            None => None,
+        }
+    }
+
+    pub fn get_array_value(&self, table: &str, value: &str) -> Option<Vec<Value>> {
+        let t = self.0[table].as_table().unwrap();
+        t[value].as_array().map(|v| v.to_vec())
     }
 }
 
 pub fn get_media_path() -> String {
-    get_toml_config_value("media_path")
+    LavenderTOML::new()
+        .get_string_value("config", "media_path")
         .unwrap()
         .replace('/', MAIN_SEPARATOR_STR)
-}
-
-pub fn get_api_key() -> Option<String> {
-    get_toml_config_value("api_key")
 }
 
 pub fn get_all_files_recursively() -> Vec<walkdir::DirEntry> {

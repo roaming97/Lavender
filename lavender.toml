@@ -1,6 +1,5 @@
 [config]
 media_path = "./media"
-api_key = "API_KEY_GOES_HERE"
 
 [extensions]
 image = ["jpg", "jpeg", "png", "gif", "bmp", "webp"]

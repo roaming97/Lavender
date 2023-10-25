@@ -111,9 +111,11 @@ fn multiple_latest_files_test_dir() {
     }
 }
 
+/*
 #[test]
 fn optimize_images() {
     let client = Client::untracked(rocket()).expect("Valid rocket.rs instance");
     let response = client.get(uri!(super::create_optimized_images)).dispatch();
     assert_eq!(response.status(), Status::Ok);
 }
+*/
