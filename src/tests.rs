@@ -1,8 +1,9 @@
-use super::rocket;
+use super::*;
+use axum::body::Body;
+use axum::http::{Request, StatusCode};
 use base64::engine::{GeneralPurpose, GeneralPurposeConfig};
 use base64::{alphabet, Engine};
-use rocket::http::Status;
-use rocket::local::blocking::Client;
+use tower::ServiceExt;
 
 /// Tests against a base64 engine to check if the provided string is valid base64 data.
 fn test_base64_str(s: &str) -> bool {
@@ -10,112 +11,89 @@ fn test_base64_str(s: &str) -> bool {
     engine.decode(s).is_ok()
 }
 
-#[test]
-fn get_single_file() {
-    let client = Client::untracked(rocket()).expect("Valid rocket.rs instance");
-    let response = client
-        .get(uri!(super::get_file("day1_master.png", false)))
-        .dispatch();
+/// Test a route.
+///
+/// It returns the body as a `String` and its status as a `StatusCode` for asserting.
+async fn test(route: &str) -> (String, StatusCode) {
+    let config = LavenderConfig::new();
+    let state = Arc::<AppState>::new(AppState { config });
+    let lavender = lavender(state);
 
-    assert_eq!(response.status().clone(), Status::Ok);
-    assert!(test_base64_str(&response.into_string().unwrap()));
+    let response = lavender
+        .oneshot(Request::builder().uri(route).body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    let status = response.status();
+    let body = hyper::body::to_bytes(response.into_body())
+        .await
+        .unwrap()
+        .to_vec();
+
+    (String::from_utf8(body).unwrap(), status)
 }
 
-#[test]
-fn get_single_file_name() {
-    let client = Client::untracked(rocket()).expect("Valid rocket.rs instance");
-    let response = client
-        .get(uri!(super::get_file("day1_master.png", true)))
-        .dispatch();
-
-    assert_eq!(response.status(), Status::Ok);
-    assert!(response.into_string().is_some());
+#[tokio::test]
+async fn get_single_file() {
+    let (text, status) = test("/file?path=day1_master.png&name_only=false").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(test_base64_str(&text))
 }
 
-#[test]
-fn get_file_amount() {
-    let client = Client::untracked(rocket()).expect("Valid rocket.rs instance");
-    let response = client.get(uri!(super::file_amount)).dispatch();
-
-    assert_eq!(response.status(), Status::Ok);
-    assert!(response.into_string().unwrap().parse::<i32>().is_ok());
+#[tokio::test]
+async fn get_single_file_name() {
+    let (text, status) = test("/file?path=day1_master.png&name_only=true").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(&text, "day1_master.png")
 }
 
-#[test]
-fn latest_file_root_path() {
-    let client = Client::untracked(rocket()).expect("Valid rocket.rs instance");
-    let response = client
-        .get(uri!(super::get_latest_files(
-            Some(1),
-            Option::<&str>::None,
-            true
-        )))
-        .dispatch();
-
-    assert_eq!(response.status(), Status::Ok);
-    assert!(test_base64_str(
-        response.into_string().unwrap().as_str().trim()
-    ));
+#[tokio::test]
+async fn get_file_amount() {
+    let (text, status) = test("/amount").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(&text.parse::<i32>().is_ok())
 }
 
-#[test]
-fn latest_file_test_dir() {
-    let client = Client::untracked(rocket()).expect("Valid rocket.rs instance");
-    let response = client
-        .get(uri!(super::get_latest_files(
-            Some(1),
-            Some("/test_dir"),
-            true
-        )))
-        .dispatch();
-
-    assert_eq!(response.status(), Status::Ok);
-    assert!(test_base64_str(
-        response.into_string().unwrap().as_str().trim()
-    ));
+#[tokio::test]
+async fn latest_file_root_path() {
+    let (text, status) = test("/latest?master=true").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(test_base64_str(text.trim()))
 }
 
-#[test]
-fn multiple_latest_files_root_path() {
-    let client = Client::untracked(rocket()).expect("Valid rocket.rs instance");
-    let response = client
-        .get(uri!(super::get_latest_files(
-            Some(3),
-            Option::<&str>::None,
-            true
-        )))
-        .dispatch();
+#[tokio::test]
+async fn latest_file_test_dir() {
+    let (text, status) = test("/latest?relpath=/test_dir&master=true").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(test_base64_str(text.trim()))
+}
 
-    assert_eq!(response.status().clone(), Status::Ok);
-
-    for data in response.into_string().unwrap().as_str().split('\n') {
-        assert!(test_base64_str(data));
+#[tokio::test]
+async fn multiple_latest_files_root_path() {
+    let (text, status) = test("/latest?count=3&master=true").await;
+    assert_eq!(status, StatusCode::OK);
+    for data in text.split('\n') {
+        assert!(test_base64_str(data))
     }
 }
 
-#[test]
-fn multiple_latest_files_test_dir() {
-    let client = Client::untracked(rocket()).expect("Valid rocket.rs instance");
-    let response = client
-        .get(uri!(super::get_latest_files(
-            Some(3),
-            Some("/test_dir"),
-            true
-        )))
-        .dispatch();
-
-    assert_eq!(response.status().clone(), Status::Ok);
-
-    for data in response.into_string().unwrap().as_str().split('\n') {
-        assert!(test_base64_str(data));
+#[tokio::test]
+async fn multiple_latest_files_test_dir() {
+    let (text, status) = test("/latest?count=3&relpath=/test_dir&master=true").await;
+    assert_eq!(status, StatusCode::OK);
+    for data in text.split('\n') {
+        assert!(test_base64_str(data))
     }
 }
 
-/*
-#[test]
-fn optimize_images() {
-    let client = Client::untracked(rocket()).expect("Valid rocket.rs instance");
-    let response = client.get(uri!(super::create_optimized_images)).dispatch();
-    assert_eq!(response.status(), Status::Ok);
+#[tokio::test]
+async fn not_found() {
+    let (_, status) = test("/notfound").await;
+    assert_eq!(status, StatusCode::NOT_FOUND)
 }
-*/
+
+#[tokio::test]
+async fn optimize_images_no_key() {
+    let (_, status) = test("/optimize").await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED)
+}

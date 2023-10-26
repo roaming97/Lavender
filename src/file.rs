@@ -1,11 +1,14 @@
 use num_traits::{FromPrimitive, PrimInt};
 use std::fs;
 use std::path::{Path, MAIN_SEPARATOR_STR};
+use std::sync::Arc;
 use toml::Value;
 
 use base64::engine::{GeneralPurpose, GeneralPurposeConfig};
 use base64::{alphabet, Engine};
 use walkdir::WalkDir;
+
+use crate::AppState;
 
 pub const MASTER_FILE_SUFFIX: &str = "_master.";
 
@@ -67,11 +70,71 @@ impl DataType {
         }
     }
 
+    pub fn from_state(extension: &str, state: &Arc<AppState>) -> Self {
+        let image_exts = &state.config.image_exts;
+        let video_exts = &state.config.video_exts;
+        let audio_exts = &state.config.audio_exts;
+
+        // Match against the extension lists
+        if image_exts.contains(&extension.to_owned()) {
+            Self::Image
+        } else if video_exts.contains(&extension.to_owned()) {
+            Self::Video
+        } else if audio_exts.contains(&extension.to_owned()) {
+            Self::Audio
+        } else {
+            Self::Unknown
+        }
+    }
+
     pub fn is_type(&self, datatype: DataType) -> bool {
         self.eq(&datatype)
     }
 }
 
+pub struct LavenderConfig {
+    pub port: u16,
+    pub media_path: String,
+
+    pub image_exts: Vec<String>,
+    pub video_exts: Vec<String>,
+    pub audio_exts: Vec<String>,
+}
+
+impl LavenderConfig {
+    pub fn new() -> Self {
+        let toml = LavenderTOML::new();
+        let media_path = toml.get_string_value("config", "media_path").unwrap();
+        let port = toml.get_number_value::<u16>("config", "port").unwrap();
+
+        let image_exts: Vec<String> = toml
+            .get_array_value("extensions", "image")
+            .unwrap()
+            .iter()
+            .map(|v| v.to_string())
+            .collect();
+        let video_exts: Vec<String> = toml
+            .get_array_value("extensions", "video")
+            .unwrap()
+            .iter()
+            .map(|v| v.to_string())
+            .collect();
+        let audio_exts: Vec<String> = toml
+            .get_array_value("extensions", "audio")
+            .unwrap()
+            .iter()
+            .map(|v| v.to_string())
+            .collect();
+
+        Self {
+            port,
+            media_path,
+            image_exts,
+            video_exts,
+            audio_exts,
+        }
+    }
+}
 pub struct LavenderTOML(Value);
 
 impl LavenderTOML {

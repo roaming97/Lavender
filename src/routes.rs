@@ -1,43 +1,65 @@
 use std::fs;
 use std::path;
 use std::path::MAIN_SEPARATOR;
+use std::sync::Arc;
 
+use crate::api::ApiKey;
 use crate::file;
 use crate::file::MASTER_FILE_SUFFIX;
+use crate::AppState;
+use axum::extract::{Query, State};
+use axum::http::StatusCode;
+use axum::response::Result;
 use image::{imageops, GenericImageView, ImageFormat};
-use rocket::http::Status;
+use serde::Deserialize;
 
-#[get("/file?<path>&<name_only>")]
-pub async fn get_file(path: &str, name_only: bool) -> Result<String, Status> {
+#[derive(Deserialize)]
+pub struct GetFileParams {
+    path: String,
+    name_only: bool,
+}
+
+pub async fn get_file(
+    State(data): State<Arc<AppState>>,
+    Query(query): Query<GetFileParams>,
+) -> Result<String, StatusCode> {
+    let path = query.path;
+    let name_only = query.name_only;
+    let media_path = &data.config.media_path;
     if name_only {
         return Ok(path.split('/').last().unwrap().to_owned());
     }
-    let filepath = format!("{}/{}", &file::get_media_path(), path);
+    let filepath = format!("{}/{}", media_path, path);
     let file = file::LavenderFile::new(filepath);
     if file.is_valid() {
         Ok(file.read_base64())
     } else {
-        Err(Status::BadRequest)
+        Err(StatusCode::BAD_REQUEST)
     }
 }
 
-#[get("/amount")]
 pub async fn file_amount() -> String {
     let v = file::get_all_files_recursively();
     v.len().to_string()
 }
 
-#[get("/latest?<count>&<relpath>&<master>")]
-pub async fn get_latest_files(
+#[derive(Deserialize)]
+pub struct LatestFilesParams {
     count: Option<usize>,
-    relpath: Option<&str>,
+    relpath: Option<String>,
     master: bool,
-) -> Result<String, Status> {
+}
+
+pub async fn get_latest_files(
+    State(data): State<Arc<AppState>>,
+    Query(query): Query<LatestFilesParams>,
+) -> Result<String, StatusCode> {
+    let media_path = &data.config.media_path;
     let path = format!(
         "{}{}{}",
-        file::get_media_path(),
+        media_path,
         path::MAIN_SEPARATOR,
-        relpath.unwrap_or_default()
+        query.relpath.unwrap_or_default()
     );
     let mut entries: Vec<_> = match fs::read_dir(path) {
         Ok(entries) => entries
@@ -45,7 +67,7 @@ pub async fn get_latest_files(
                 let entry = e.ok()?;
                 let mut path = entry.path();
                 let extension = path.extension()?.to_str()?;
-                let datatype = file::DataType::from_extension(extension);
+                let datatype = file::DataType::from_state(extension, &data);
                 let metadata = entry.metadata().ok()?;
                 let modified = metadata.modified().ok()?;
                 /*
@@ -56,7 +78,7 @@ pub async fn get_latest_files(
                 */
                 if metadata.is_file() && !path.to_string_lossy().contains(file::MASTER_FILE_SUFFIX)
                 {
-                    if datatype.is_type(file::DataType::Image) && master {
+                    if datatype.is_type(file::DataType::Image) && query.master {
                         path = path
                             .to_string_lossy()
                             .replace(
@@ -71,37 +93,38 @@ pub async fn get_latest_files(
                 }
             })
             .collect(),
-        Err(_) => return Err(Status::InternalServerError),
+        Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
     };
 
     entries.sort_by(|(_, t1), (_, t2)| t2.cmp(t1));
-    let count = count.unwrap_or(1).min(entries.len());
+    let count = query.count.unwrap_or(1).min(entries.len());
     entries.truncate(count);
 
     let mut output = String::new();
 
     for (path, _) in entries {
-        println!("{}", path.to_str().unwrap());
         let f = file::LavenderFile::new(path);
         if f.is_valid() {
             output.push_str(&format!("{}\n", f.read_base64()));
         } else {
-            return Err(Status::BadRequest);
+            return Err(StatusCode::BAD_REQUEST);
         }
     }
 
     Ok(output)
 }
 
-#[get("/optimize")]
-pub fn create_optimized_images(_key: crate::api::ApiKey) -> Status {
+pub async fn create_optimized_images(
+    State(data): State<Arc<AppState>>,
+    ApiKey(_key): ApiKey,
+) -> StatusCode {
     let v = file::get_all_files_recursively();
     for entry in v {
         let path = entry.path();
         let parent = path.parent().unwrap().to_str().unwrap();
         let filename = path.file_stem().unwrap().to_str().unwrap();
         let extension = path.extension().unwrap().to_str().unwrap();
-        if !file::DataType::from_extension(extension.to_ascii_lowercase().as_str())
+        if !file::DataType::from_state(extension.to_ascii_lowercase().as_str(), &data)
             .is_type(file::DataType::Image)
         {
             continue;
@@ -110,7 +133,6 @@ pub fn create_optimized_images(_key: crate::api::ApiKey) -> Status {
             "{}{}{}{}{}",
             parent, MAIN_SEPARATOR, filename, MASTER_FILE_SUFFIX, extension
         );
-        dbg!(&target);
         if path::Path::new(&target).exists() {
             continue;
         } else {
@@ -130,10 +152,10 @@ pub fn create_optimized_images(_key: crate::api::ApiKey) -> Status {
                         entry.path().to_str().unwrap(),
                         e
                     );
-                    return Status::InternalServerError;
+                    return StatusCode::INTERNAL_SERVER_ERROR;
                 }
             }
         }
     }
-    Status::Ok
+    StatusCode::OK
 }

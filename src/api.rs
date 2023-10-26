@@ -1,39 +1,81 @@
-use rocket::{
-    http::Status,
-    request::{FromRequest, Outcome, Request},
+use axum::{
+    async_trait,
+    extract::FromRequestParts,
+    http::{request::Parts, HeaderName, StatusCode},
+    response::{IntoResponse, Response},
 };
+use serde::Deserialize;
 use sha3::{Digest, Sha3_256};
 use std::env;
 
-#[derive(Debug, PartialEq)]
-pub struct ApiKey(String);
+#[derive(Debug, PartialEq, Deserialize)]
+pub struct ApiKey(pub String);
 
 #[derive(Debug)]
 pub enum ApiKeyError {
     Missing,
+    Empty,
     Invalid,
     MissingEnv,
 }
 
-#[rocket::async_trait]
-impl<'r> FromRequest<'r> for ApiKey {
-    type Error = ApiKeyError;
+impl IntoResponse for ApiKeyError {
+    fn into_response(self) -> Response {
+        let body = match self {
+            ApiKeyError::Invalid => (StatusCode::BAD_REQUEST, "Invalid Lavender API Key!"),
+            ApiKeyError::Empty => (
+                StatusCode::UNAUTHORIZED,
+                "Provided Lavender API Key is empty!",
+            ),
+            ApiKeyError::Missing => (StatusCode::UNAUTHORIZED, "Lavender API Key is missing!"),
+            ApiKeyError::MissingEnv => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Lavender API Key is missing from the environment variables!",
+            ),
+        };
 
-    async fn from_request(req: &'r Request<'_>) -> Outcome<Self, Self::Error> {
+        body.into_response()
+    }
+}
+
+impl ApiKey {
+    /// Checks if the API key is valid by testing it against a hash.
+    fn validate(&self) -> Result<(), ApiKeyError> {
+        let k = &self.0;
+        if k.is_empty() {
+            return Err(ApiKeyError::Empty);
+        }
         let hash = match env::var("LAVENDER_API_HASH") {
             Ok(s) => s,
             Err(_) => {
                 println!("Lavender API hash is missing from environment variables!");
-                return Outcome::Failure((Status::InternalServerError, ApiKeyError::MissingEnv));
+                return Err(ApiKeyError::MissingEnv);
             }
         };
 
-        match req.headers().get_one("lv-api-key") {
-            Some(k) if format!("{:x}", Sha3_256::digest(k.as_bytes())) == hash => {
-                Outcome::Success(ApiKey(k.to_owned()))
+        if format!("{:x}", Sha3_256::digest(k.as_bytes())) == hash {
+            Ok(())
+        } else {
+            Err(ApiKeyError::Invalid)
+        }
+    }
+}
+
+#[async_trait]
+impl<S: Send + Sync> FromRequestParts<S> for ApiKey {
+    type Rejection = (StatusCode, ApiKeyError);
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        let header_name = HeaderName::from_static("lv-api-key");
+        if let Some(value) = parts.headers.get(&header_name) {
+            let api_key = value.to_str().map_err(|_| ApiKeyError::Invalid).unwrap();
+            let api_key = ApiKey(api_key.to_owned());
+            match api_key.validate() {
+                Ok(_) => Ok(api_key),
+                Err(e) => Err((StatusCode::BAD_REQUEST, e)),
             }
-            Some(_) => Outcome::Failure((Status::Unauthorized, ApiKeyError::Invalid)),
-            None => Outcome::Failure((Status::Unauthorized, ApiKeyError::Missing)),
+        } else {
+            Err((StatusCode::UNAUTHORIZED, ApiKeyError::Missing))
         }
     }
 }

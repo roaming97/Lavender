@@ -1,16 +1,16 @@
 # Lavender
 
-The backend for my [website](https://roaming97.com). It serves as a quick gateway to an image server I have while being flexible and letting me automate tasks without having to hop back into the Linux server and change things manually.
+The API for my [website](https://roaming97.com). It serves as a quick gateway to a file server while being flexible and letting me automate tasks without having to hop back into it and change things manually.
 
-Lavender is written 100% in **[Rust](https://www.rust-lang.org/)** using the [Rocket](https://rocket.rs/) web framework, which is very reminiscent of Flask for Python.
+Lavender is written 100% in **[Rust](https://www.rust-lang.org/)** using the [axum](https://github.com/tokio-rs/axum) web framework, which is very modular and is the main framework supported by [Shuttle](https://shuttle.rs), a Rust deployment tool similar to Vercel.
 
 ## Features
-* Get any image from a specified directory on the server as a Base64 encoded string, useful for a constantly changing gallery of media. Static and often requested images stay at the frontend of course.
+* Get any image from a specified directory on the server as a Base64 encoded string, useful for a constantly changing gallery of media. Less frequently modified images stay at the frontend of course.
 
-* Get a determined amount of the latest images (sorted by date modified) that are in the media directory.
+* Get a determinate amount of the latest images (sorted by date modified) that are in the media directory. Might change this so simply sort by name later on.
 
 * Get the total amount of files in the media directory recursively.
 
 * Configurable settings in a [`lavender.toml`](./lavender.toml) file, such as the specified directory where to look for media, file extension settings, and more to be added.
 
-* A helper route that optimizes all of the images from a specified directory, it only works when providing the right API key though. (This has to be configured by adding a `LAVENDER_API_HASH` environment variable when running the program or to the system's environment variables.)
+* A helper route that optimizes all of the images from a specified directory, it only works when providing the right API key though. This has to be configured by adding a `LAVENDER_API_HASH` environment variable when running the program or to the system's environment variables.
