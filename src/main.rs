@@ -8,10 +8,10 @@ mod tests;
 use axum::{routing::get, Router};
 use file::LavenderConfig;
 use routes::*;
-use tokio::signal;
 
 pub struct AppState {
     config: LavenderConfig,
+    lavender_api_hash: String
 }
 
 /// A lavender blooms from the rusty soil.
@@ -24,44 +24,13 @@ fn lavender(state: Arc<AppState>) -> Router {
         .with_state(state)
 }
 
-#[tokio::main]
-async fn main() {
+#[shuttle_runtime::main]
+pub async fn axum(
+    #[shuttle_secrets::Secrets] secrets: shuttle_secrets::SecretStore,
+) -> shuttle_axum::ShuttleAxum {
     let config = LavenderConfig::new();
-    let port = config.port;
-    let state = Arc::<AppState>::new(AppState { config });
+    let lavender_api_hash = secrets.get("LAVENDER_API_HASH").expect("Environment variable LAVENDER_API_HASH");
+    let state = Arc::<AppState>::new(AppState { config, lavender_api_hash });
 
-    let lavender = lavender(state);
-
-    let address = &format!("127.0.0.1:{}", port).parse().unwrap();
-    axum::Server::bind(address)
-        .serve(lavender.into_make_service())
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-        .unwrap()
-}
-
-async fn shutdown_signal() {
-    let ctrl_c = async {
-        signal::ctrl_c()
-            .await
-            .expect("failed to install Ctrl+C handler");
-    };
-
-    #[cfg(unix)]
-    let terminate = async {
-        signal::unix::signal(signal::unix::SignalKind::terminate())
-            .expect("failed to install signal handler")
-            .recv()
-            .await;
-    };
-
-    #[cfg(not(unix))]
-    let terminate = std::future::pending::<()>();
-
-    tokio::select! {
-        _ = ctrl_c => {},
-        _ = terminate => {},
-    }
-
-    println!("Detected Ctrl+C, shutting down gracefully");
+    Ok(lavender(state).into())
 }

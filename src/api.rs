@@ -6,7 +6,9 @@ use axum::{
 };
 use serde::Deserialize;
 use sha3::{Digest, Sha3_256};
-use std::env;
+use std::sync::Arc;
+
+use crate::AppState;
 
 #[derive(Debug, PartialEq, Deserialize)]
 pub struct ApiKey(pub String);
@@ -16,7 +18,6 @@ pub enum ApiKeyError {
     Missing,
     Empty,
     Invalid,
-    MissingEnv,
 }
 
 impl IntoResponse for ApiKeyError {
@@ -28,10 +29,6 @@ impl IntoResponse for ApiKeyError {
                 "Provided Lavender API Key is empty!",
             ),
             ApiKeyError::Missing => (StatusCode::UNAUTHORIZED, "Lavender API Key is missing!"),
-            ApiKeyError::MissingEnv => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Lavender API Key is missing from the environment variables!",
-            ),
         };
 
         body.into_response()
@@ -40,18 +37,11 @@ impl IntoResponse for ApiKeyError {
 
 impl ApiKey {
     /// Checks if the API key is valid by testing it against a hash.
-    fn validate(&self) -> Result<(), ApiKeyError> {
+    fn validate(&self, hash: &str) -> Result<(), ApiKeyError> {
         let k = &self.0;
         if k.is_empty() {
             return Err(ApiKeyError::Empty);
         }
-        let hash = match env::var("LAVENDER_API_HASH") {
-            Ok(s) => s,
-            Err(_) => {
-                println!("Lavender API hash is missing from environment variables!");
-                return Err(ApiKeyError::MissingEnv);
-            }
-        };
 
         if format!("{:x}", Sha3_256::digest(k.as_bytes())) == hash {
             Ok(())
@@ -62,15 +52,16 @@ impl ApiKey {
 }
 
 #[async_trait]
-impl<S: Send + Sync> FromRequestParts<S> for ApiKey {
+impl FromRequestParts<Arc<AppState>> for ApiKey {
     type Rejection = (StatusCode, ApiKeyError);
 
-    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(parts: &mut Parts, state: &Arc<AppState>) -> Result<Self, Self::Rejection> {
         let header_name = HeaderName::from_static("lv-api-key");
         if let Some(value) = parts.headers.get(&header_name) {
             let api_key = value.to_str().map_err(|_| ApiKeyError::Invalid).unwrap();
             let api_key = ApiKey(api_key.to_owned());
-            match api_key.validate() {
+            let hash = &state.lavender_api_hash;
+            match api_key.validate(hash) {
                 Ok(_) => Ok(api_key),
                 Err(e) => Err((StatusCode::BAD_REQUEST, e)),
             }

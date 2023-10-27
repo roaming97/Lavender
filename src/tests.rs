@@ -16,7 +16,8 @@ fn test_base64_str(s: &str) -> bool {
 /// It returns the body as a `String` and its status as a `StatusCode` for asserting.
 async fn test(route: &str) -> (String, StatusCode) {
     let config = LavenderConfig::new();
-    let state = Arc::<AppState>::new(AppState { config });
+    let lavender_api_hash = String::from("TEST_HASH");
+    let state = Arc::<AppState>::new(AppState { config, lavender_api_hash });
     let lavender = lavender(state);
 
     let response = lavender

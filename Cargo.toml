@@ -15,6 +15,8 @@ tokio = "1.33.0"
 axum = { version = "0.6.20", features = ["macros", "query"] }
 serde = "1.0.189"
 hyper = { version = "0.14.27", features = ["full"] }
+shuttle-axum = "0.30.1"
+shuttle-secrets = "0.30.1"
 
 [dev-dependencies]
 tower = { version = "0.4.13", features = ["util"] }
