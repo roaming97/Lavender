@@ -53,17 +53,18 @@ pub enum DataType {
 impl DataType {
     pub fn from_extension(extension: &str) -> Self {
         let toml = LavenderTOML::new();
+        let extension = Value::from(extension);
 
         let image_exts = toml.get_array_value("extensions", "image").unwrap();
         let video_exts = toml.get_array_value("extensions", "video").unwrap();
         let audio_exts = toml.get_array_value("extensions", "audio").unwrap();
 
         // Match against the extension lists
-        if image_exts.contains(&Value::from(extension)) {
+        if image_exts.contains(&extension) {
             Self::Image
-        } else if video_exts.contains(&Value::from(extension)) {
+        } else if video_exts.contains(&extension) {
             Self::Video
-        } else if audio_exts.contains(&Value::from(extension)) {
+        } else if audio_exts.contains(&extension) {
             Self::Audio
         } else {
             Self::Unknown
@@ -104,7 +105,11 @@ pub struct LavenderConfig {
 impl LavenderConfig {
     pub fn new() -> Self {
         let toml = LavenderTOML::new();
-        let media_path = toml.get_string_value("config", "media_path").unwrap();
+        let media_path = toml
+            .get_string_value("config", "media_path")
+            .unwrap()
+            .replace('/', MAIN_SEPARATOR_STR);
+
         let port = toml.get_number_value::<u16>("config", "port").unwrap();
 
         let image_exts: Vec<String> = toml
@@ -170,15 +175,8 @@ impl LavenderTOML {
     }
 }
 
-pub fn get_media_path() -> String {
-    LavenderTOML::new()
-        .get_string_value("config", "media_path")
-        .unwrap()
-        .replace('/', MAIN_SEPARATOR_STR)
-}
-
-pub fn get_all_files_recursively() -> Vec<walkdir::DirEntry> {
-    WalkDir::new(get_media_path())
+pub fn get_all_files_recursively(state: &Arc<AppState>) -> Vec<walkdir::DirEntry> {
+    WalkDir::new(&state.config.media_path)
         .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| {

@@ -38,8 +38,8 @@ pub async fn get_file(
     }
 }
 
-pub async fn file_amount() -> String {
-    let v = file::get_all_files_recursively();
+pub async fn file_amount(State(data): State<Arc<AppState>>) -> String {
+    let v = file::get_all_files_recursively(&data);
     v.len().to_string()
 }
 
@@ -118,7 +118,7 @@ pub async fn create_optimized_images(
     State(data): State<Arc<AppState>>,
     ApiKey(_key): ApiKey,
 ) -> StatusCode {
-    let v = file::get_all_files_recursively();
+    let v = file::get_all_files_recursively(&data);
     for entry in v {
         let path = entry.path();
         let parent = path.parent().unwrap().to_str().unwrap();
