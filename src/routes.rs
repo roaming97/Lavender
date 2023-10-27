@@ -20,25 +20,25 @@ pub struct GetFileParams {
 }
 
 pub async fn get_file(
-    State(data): State<Arc<AppState>>,
     Query(query): Query<GetFileParams>,
+    ApiKey(_): ApiKey,
 ) -> Result<String, StatusCode> {
     let path = query.path;
     let name_only = query.name_only;
-    let media_path = &data.config.media_path;
-    if name_only {
-        return Ok(path.split('/').last().unwrap().to_owned());
-    }
-    let filepath = format!("{}/{}", media_path, path);
+    let filepath = format!("assets/{}", &path);
     let file = file::LavenderFile::new(filepath);
+
     if file.is_valid() {
+        if name_only {
+            return Ok(path.split('/').last().unwrap().to_owned());
+        }
         Ok(file.read_base64())
     } else {
         Err(StatusCode::BAD_REQUEST)
     }
 }
 
-pub async fn file_amount(State(data): State<Arc<AppState>>) -> String {
+pub async fn file_amount(State(data): State<Arc<AppState>>, ApiKey(_): ApiKey) -> String {
     let v = file::get_all_files_recursively(&data);
     v.len().to_string()
 }
@@ -53,6 +53,7 @@ pub struct LatestFilesParams {
 pub async fn get_latest_files(
     State(data): State<Arc<AppState>>,
     Query(query): Query<LatestFilesParams>,
+    ApiKey(_): ApiKey,
 ) -> Result<String, StatusCode> {
     let media_path = &data.config.media_path;
     let path = format!(
@@ -96,6 +97,7 @@ pub async fn get_latest_files(
         Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
     };
 
+    // TODO: Decide if it's entirely necessary to sort by date.
     entries.sort_by(|(_, t1), (_, t2)| t2.cmp(t1));
     let count = query.count.unwrap_or(1).min(entries.len());
     entries.truncate(count);
@@ -116,7 +118,7 @@ pub async fn get_latest_files(
 
 pub async fn create_optimized_images(
     State(data): State<Arc<AppState>>,
-    ApiKey(_key): ApiKey,
+    ApiKey(_): ApiKey,
 ) -> StatusCode {
     let v = file::get_all_files_recursively(&data);
     for entry in v {

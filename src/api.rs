@@ -56,9 +56,12 @@ impl FromRequestParts<Arc<AppState>> for ApiKey {
     type Rejection = (StatusCode, ApiKeyError);
 
     async fn from_request_parts(parts: &mut Parts, state: &Arc<AppState>) -> Result<Self, Self::Rejection> {
-        let header_name = HeaderName::from_static("lv-api-key");
+        let header_name = HeaderName::from_static("lav-api-key");
         if let Some(value) = parts.headers.get(&header_name) {
             let api_key = value.to_str().map_err(|_| ApiKeyError::Invalid).unwrap();
+            if api_key.is_empty() {
+                return Err((StatusCode::UNAUTHORIZED, ApiKeyError::Empty))
+            }
             let api_key = ApiKey(api_key.to_owned());
             let hash = &state.lavender_api_hash;
             match api_key.validate(hash) {
