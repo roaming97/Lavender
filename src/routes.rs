@@ -27,12 +27,13 @@ pub async fn get_file(
     let path = query.path;
     let name_only = query.name_only;
     let media_path = &data.config.media_path;
-    if name_only {
-        return Ok(path.split('/').last().unwrap().to_owned());
-    }
     let filepath = format!("{}/{}", media_path, path);
     let file = file::LavenderFile::new(filepath);
+
     if file.is_valid() {
+        if name_only {
+            return Ok(path.split('/').last().unwrap().to_owned());
+        }
         Ok(file.read_base64())
     } else {
         Err(StatusCode::BAD_REQUEST)
