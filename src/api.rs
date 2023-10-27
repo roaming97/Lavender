@@ -6,7 +6,9 @@ use axum::{
 };
 use serde::Deserialize;
 use sha3::{Digest, Sha3_256};
-use std::env;
+use std::{env, sync::Arc};
+
+use crate::AppState;
 
 #[derive(Debug, PartialEq, Deserialize)]
 pub struct ApiKey(pub String);
@@ -62,13 +64,19 @@ impl ApiKey {
 }
 
 #[async_trait]
-impl<S: Send + Sync> FromRequestParts<S> for ApiKey {
+impl FromRequestParts<Arc<AppState>> for ApiKey {
     type Rejection = (StatusCode, ApiKeyError);
 
-    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        let header_name = HeaderName::from_static("lv-api-key");
+    async fn from_request_parts(
+        parts: &mut Parts,
+        _state: &Arc<AppState>,
+    ) -> Result<Self, Self::Rejection> {
+        let header_name = HeaderName::from_static("lav-api-key");
         if let Some(value) = parts.headers.get(&header_name) {
             let api_key = value.to_str().map_err(|_| ApiKeyError::Invalid).unwrap();
+            if api_key.is_empty() {
+                return Err((StatusCode::UNAUTHORIZED, ApiKeyError::Empty));
+            }
             let api_key = ApiKey(api_key.to_owned());
             match api_key.validate() {
                 Ok(_) => Ok(api_key),

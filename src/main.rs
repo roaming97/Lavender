@@ -12,6 +12,7 @@ use tokio::signal;
 
 pub struct AppState {
     config: LavenderConfig,
+
 }
 
 /// A lavender blooms from the rusty soil.
