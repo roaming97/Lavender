@@ -8,7 +8,7 @@ use serde::Deserialize;
 use sha3::{Digest, Sha3_256};
 use std::{env, sync::Arc};
 
-use crate::AppState;
+use crate::file::LavenderConfig;
 
 #[derive(Debug, PartialEq, Deserialize)]
 pub struct ApiKey(pub String);
@@ -64,12 +64,12 @@ impl ApiKey {
 }
 
 #[async_trait]
-impl FromRequestParts<Arc<AppState>> for ApiKey {
+impl FromRequestParts<Arc<LavenderConfig>> for ApiKey {
     type Rejection = (StatusCode, ApiKeyError);
 
     async fn from_request_parts(
         parts: &mut Parts,
-        _state: &Arc<AppState>,
+        _state: &Arc<LavenderConfig>,
     ) -> Result<Self, Self::Rejection> {
         let header_name = HeaderName::from_static("lav-api-key");
         if let Some(value) = parts.headers.get(&header_name) {

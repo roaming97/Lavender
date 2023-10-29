@@ -10,12 +10,8 @@ use file::LavenderConfig;
 use routes::*;
 use tokio::signal;
 
-pub struct AppState {
-    config: LavenderConfig,
-}
-
 /// A lavender blooms from the rusty soil.
-fn lavender(state: Arc<AppState>) -> Router {
+fn lavender(state: Arc<LavenderConfig>) -> Router {
     Router::new()
         .route("/amount", get(file_amount))
         .route("/file", get(get_file))
@@ -28,7 +24,7 @@ fn lavender(state: Arc<AppState>) -> Router {
 async fn main() {
     let config = LavenderConfig::new();
     let port = config.port;
-    let state = Arc::<AppState>::new(AppState { config });
+    let state = Arc::<LavenderConfig>::new(config);
 
     let lavender = lavender(state);
 

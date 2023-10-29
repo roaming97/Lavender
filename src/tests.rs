@@ -20,7 +20,7 @@ fn test_base64_str(s: &str) -> bool {
 /// It returns the body as a `String` and its status as a `StatusCode` for asserting.
 async fn test(route: &str, key: Option<&str>) -> (String, StatusCode) {
     let config = LavenderConfig::new();
-    let state = Arc::<AppState>::new(AppState { config });
+    let state = Arc::<LavenderConfig>::new(config);
 
     let lavender = lavender(state);
 
@@ -51,22 +51,14 @@ async fn test(route: &str, key: Option<&str>) -> (String, StatusCode) {
 
 #[tokio::test]
 async fn get_single_file() {
-    let (text, status) = test(
-        "/file?path=day1_master.png&name_only=false",
-        TEST_API_KEY,
-    )
-    .await;
+    let (text, status) = test("/file?path=day1_master.png&name_only=false", TEST_API_KEY).await;
     assert_eq!(status, StatusCode::OK);
     assert!(test_base64_str(&text))
 }
 
 #[tokio::test]
 async fn get_single_file_name() {
-    let (text, status) = test(
-        "/file?path=day1_master.png&name_only=true",
-        TEST_API_KEY,
-    )
-    .await;
+    let (text, status) = test("/file?path=day1_master.png&name_only=true", TEST_API_KEY).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(&text, "day1_master.png")
 }
@@ -94,7 +86,7 @@ async fn latest_file_test_dir() {
 
 #[tokio::test]
 async fn multiple_latest_files_root_path() {
-    let (text, status) = test("/latest?count=3&master=true", TEST_API_KEY).await;
+    let (text, status) = test("/latest?count=4&master=true", TEST_API_KEY).await;
     assert_eq!(status, StatusCode::OK);
     for data in text.split('\n') {
         assert!(test_base64_str(data))
@@ -104,7 +96,7 @@ async fn multiple_latest_files_root_path() {
 #[tokio::test]
 async fn multiple_latest_files_test_dir() {
     let (text, status) = test(
-        "/latest?count=3&relpath=/test_dir&master=true",
+        "/latest?count=4&relpath=/test_dir&master=true",
         TEST_API_KEY,
     )
     .await;
@@ -145,5 +137,19 @@ async fn unauthorized_invalid_key() {
         Some("this key is invalid"),
     )
     .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST)
+}
+
+#[tokio::test]
+async fn latest_zero_files() {
+    let (text, status) = test("/latest?count=0&master=true", TEST_API_KEY).await;
+    // should default to 1
+    assert_eq!(status, StatusCode::OK);
+    assert!(test_base64_str(text.trim()))
+}
+
+#[tokio::test]
+async fn latest_negative_files() {
+    let (_, status) = test("/latest?count=-1&master=true", TEST_API_KEY).await;
     assert_eq!(status, StatusCode::BAD_REQUEST)
 }

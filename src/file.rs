@@ -8,8 +8,6 @@ use base64::engine::{GeneralPurpose, GeneralPurposeConfig};
 use base64::{alphabet, Engine};
 use walkdir::WalkDir;
 
-use crate::AppState;
-
 pub const MASTER_FILE_SUFFIX: &str = "_master.";
 
 pub struct LavenderFile {
@@ -71,10 +69,10 @@ impl DataType {
         }
     }
 
-    pub fn from_state(extension: &str, state: &Arc<AppState>) -> Self {
-        let image_exts = &state.config.image_exts;
-        let video_exts = &state.config.video_exts;
-        let audio_exts = &state.config.audio_exts;
+    pub fn from_state(extension: &str, state: &Arc<LavenderConfig>) -> Self {
+        let image_exts = &state.image_exts;
+        let video_exts = &state.video_exts;
+        let audio_exts = &state.audio_exts;
 
         // Match against the extension lists
         if image_exts.contains(&extension.to_owned()) {
@@ -175,8 +173,8 @@ impl LavenderTOML {
     }
 }
 
-pub fn get_all_files_recursively(state: &Arc<AppState>) -> Vec<walkdir::DirEntry> {
-    WalkDir::new(&state.config.media_path)
+pub fn get_all_files_recursively(state: &Arc<LavenderConfig>) -> Vec<walkdir::DirEntry> {
+    WalkDir::new(&state.media_path)
         .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| {

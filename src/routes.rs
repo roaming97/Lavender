@@ -1,12 +1,10 @@
 use std::fs;
 use std::path;
-use std::path::MAIN_SEPARATOR;
 use std::sync::Arc;
 
 use crate::api::ApiKey;
 use crate::file;
-use crate::file::MASTER_FILE_SUFFIX;
-use crate::AppState;
+use crate::file::LavenderConfig;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::Result;
@@ -20,13 +18,13 @@ pub struct GetFileParams {
 }
 
 pub async fn get_file(
-    State(data): State<Arc<AppState>>,
+    State(data): State<Arc<LavenderConfig>>,
     Query(query): Query<GetFileParams>,
     ApiKey(_): ApiKey,
 ) -> Result<String, StatusCode> {
     let path = query.path;
     let name_only = query.name_only;
-    let media_path = &data.config.media_path;
+    let media_path = &data.media_path;
     let filepath = format!("{}/{}", media_path, path);
     let file = file::LavenderFile::new(filepath);
 
@@ -40,7 +38,7 @@ pub async fn get_file(
     }
 }
 
-pub async fn file_amount(State(data): State<Arc<AppState>>, ApiKey(_): ApiKey) -> String {
+pub async fn file_amount(State(data): State<Arc<LavenderConfig>>, ApiKey(_): ApiKey) -> String {
     let v = file::get_all_files_recursively(&data);
     v.len().to_string()
 }
@@ -53,11 +51,11 @@ pub struct LatestFilesParams {
 }
 
 pub async fn get_latest_files(
-    State(data): State<Arc<AppState>>,
+    State(data): State<Arc<LavenderConfig>>,
     Query(query): Query<LatestFilesParams>,
     ApiKey(_): ApiKey,
 ) -> Result<String, StatusCode> {
-    let media_path = &data.config.media_path;
+    let media_path = &data.media_path;
     let path = format!(
         "{}{}{}",
         media_path,
@@ -101,7 +99,7 @@ pub async fn get_latest_files(
 
     // TODO: Decide if it's entirely necessary to sort by date.
     entries.sort_by(|(_, t1), (_, t2)| t2.cmp(t1));
-    let count = query.count.unwrap_or(1).min(entries.len());
+    let count = query.count.unwrap_or(1).clamp(1, entries.len());
     entries.truncate(count);
 
     let mut output = String::new();
@@ -119,7 +117,7 @@ pub async fn get_latest_files(
 }
 
 pub async fn create_optimized_images(
-    State(data): State<Arc<AppState>>,
+    State(data): State<Arc<LavenderConfig>>,
     ApiKey(_): ApiKey,
 ) -> StatusCode {
     let v = file::get_all_files_recursively(&data);
@@ -135,7 +133,11 @@ pub async fn create_optimized_images(
         }
         let target = format!(
             "{}{}{}{}{}",
-            parent, MAIN_SEPARATOR, filename, MASTER_FILE_SUFFIX, extension
+            parent,
+            path::MAIN_SEPARATOR,
+            filename,
+            file::MASTER_FILE_SUFFIX,
+            extension
         );
         if path::Path::new(&target).exists() {
             continue;
