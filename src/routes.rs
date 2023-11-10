@@ -21,15 +21,13 @@ pub async fn get_file(
     Query(query): Query<GetFileParams>,
     ApiKey(_): ApiKey,
 ) -> Result<String, StatusCode> {
-    let path = query.path;
-    let name_only = query.name_only;
-    let media_path = &data.server.media_path;
-    let filepath = format!("{}/{}", media_path, path);
+    let path = path::Path::new(&query.path);
+    let filepath = format!("{}/{}", &data.server.media_path, path.display());
     let file = file::LavenderFile::new(filepath);
 
     if file.is_valid() {
-        if name_only {
-            return Ok(path.split('/').last().unwrap().to_owned());
+        if query.name_only {
+            return Ok(path.file_name().unwrap().to_string_lossy().to_string());
         }
         Ok(file.read_base64())
     } else {
@@ -57,9 +55,12 @@ pub async fn get_latest_files(
     ApiKey(_): ApiKey,
 ) -> Result<String, StatusCode> {
     let count = query.count.unwrap_or(1);
-    let media_path = &data.server.media_path;
-    let relpath = query.relpath.unwrap_or_default();
-    let path = format!("{}{}{}", media_path, path::MAIN_SEPARATOR, &relpath);
+    let path = format!(
+        "{}{}{}",
+        &data.server.media_path,
+        path::MAIN_SEPARATOR,
+        &query.relpath.unwrap_or_default()
+    );
     let type_filter = file::DataType::from(query.filetype.unwrap_or_default(), Some(&data));
 
     let mut walk: Vec<walkdir::DirEntry> = file::get_all_files_recursively(path)
