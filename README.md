@@ -7,7 +7,7 @@ Lavender is written 100% in **[Rust](https://www.rust-lang.org/)** using the [ax
 ## Features
 * Get any image from a specified directory on the server as a Base64 encoded string, useful for a constantly changing gallery of media. Less frequently modified images stay at the frontend of course.
 
-* Get a determinate amount of the latest files (sorted by date modified) that are in the media directory. Might change this to sorting by name later on.
+* Get a determinate amount of the latest files (sorted alphabetically) that are in the media directory.
 
 * Get the total amount of files in the media directory recursively.
 

@@ -23,7 +23,7 @@ fn lavender(state: Arc<LavenderConfig>) -> Router {
 #[tokio::main]
 async fn main() {
     let config = LavenderConfig::new();
-    let port = config.port;
+    let port = config.server.port;
     let state = Arc::<LavenderConfig>::new(config);
 
     let lavender = lavender(state);

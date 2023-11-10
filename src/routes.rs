@@ -1,4 +1,3 @@
-use std::fs;
 use std::path;
 use std::sync::Arc;
 
@@ -24,7 +23,7 @@ pub async fn get_file(
 ) -> Result<String, StatusCode> {
     let path = query.path;
     let name_only = query.name_only;
-    let media_path = &data.media_path;
+    let media_path = &data.server.media_path;
     let filepath = format!("{}/{}", media_path, path);
     let file = file::LavenderFile::new(filepath);
 
@@ -39,14 +38,16 @@ pub async fn get_file(
 }
 
 pub async fn file_amount(State(data): State<Arc<LavenderConfig>>, ApiKey(_): ApiKey) -> String {
-    let v = file::get_all_files_recursively(&data);
-    v.len().to_string()
+    file::get_all_files_recursively(&data.server.media_path)
+        .len()
+        .to_string()
 }
 
 #[derive(Deserialize)]
 pub struct LatestFilesParams {
     count: Option<usize>,
     relpath: Option<String>,
+    filetype: Option<String>,
     master: bool,
 }
 
@@ -55,64 +56,51 @@ pub async fn get_latest_files(
     Query(query): Query<LatestFilesParams>,
     ApiKey(_): ApiKey,
 ) -> Result<String, StatusCode> {
-    let media_path = &data.media_path;
-    let path = format!(
-        "{}{}{}",
-        media_path,
-        path::MAIN_SEPARATOR,
-        query.relpath.unwrap_or_default()
-    );
-    let mut entries: Vec<_> = match fs::read_dir(path) {
-        Ok(entries) => entries
-            .filter_map(|e| {
-                let entry = e.ok()?;
-                let mut path = entry.path();
-                let extension = path.extension()?.to_str()?;
-                let datatype = file::DataType::from_state(extension, &data);
-                let metadata = entry.metadata().ok()?;
-                let modified = metadata.modified().ok()?;
-                /*
-                One cannot rely on master images directly since they can be created
-                anytime differing with the original files' dates, so let's filter those
-                out and add the master suffix later.
-                This helps the later date sorting to be more accurate.
-                */
-                if metadata.is_file() && !path.to_string_lossy().contains(file::MASTER_FILE_SUFFIX)
-                {
-                    if datatype.is_type(file::DataType::Image) && query.master {
-                        path = path
-                            .to_string_lossy()
-                            .replace(
-                                &format!(".{}", extension),
-                                &format!("{}{}", file::MASTER_FILE_SUFFIX, extension),
-                            )
-                            .into();
-                    }
-                    Some((path, modified))
-                } else {
-                    None
-                }
-            })
-            .collect(),
-        Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
-    };
+    let count = query.count.unwrap_or(1);
+    let media_path = &data.server.media_path;
+    let relpath = query.relpath.unwrap_or_default();
+    let path = format!("{}{}{}", media_path, path::MAIN_SEPARATOR, &relpath);
+    let type_filter = file::DataType::from(query.filetype.unwrap_or_default(), Some(&data));
 
-    // TODO: Decide if it's entirely necessary to sort by date.
-    entries.sort_by(|(_, t1), (_, t2)| t2.cmp(t1));
-    let count = query.count.unwrap_or(1).clamp(1, entries.len());
-    entries.truncate(count);
+    let mut walk: Vec<walkdir::DirEntry> = file::get_all_files_recursively(path)
+        .into_iter()
+        .filter(|e| {
+            let extension = e.path().extension().unwrap_or_default();
+            let datatype = file::DataType::from(extension, Some(&data));
+            if datatype.is_type(&file::DataType::Image)
+                && e.path().to_string_lossy().contains(&format!(
+                    "{}{}",
+                    file::MASTER_FILE_SUFFIX,
+                    extension.to_string_lossy()
+                ))
+            {
+                query.master
+            } else if !type_filter.is_type(&file::DataType::Unknown) {
+                datatype.is_type(&type_filter)
+            } else {
+                true
+            }
+        })
+        .collect();
+
+    if walk.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let count = count.clamp(1, walk.len());
+    walk.truncate(count);
 
     let mut output = String::new();
 
-    for (path, _) in entries {
-        let f = file::LavenderFile::new(path);
-        if f.is_valid() {
-            output.push_str(&format!("{}\n", f.read_base64()));
-        } else {
+    for entry in walk {
+        println!("{}", &entry.path().to_string_lossy());
+        let f = file::LavenderFile::new(entry.path());
+        if !f.is_valid() {
             return Err(StatusCode::BAD_REQUEST);
         }
+        output.push_str(&format!("{}\n", f.read_base64()));
     }
 
+    let output = output.trim_end().to_owned();
     Ok(output)
 }
 
@@ -120,14 +108,14 @@ pub async fn create_optimized_images(
     State(data): State<Arc<LavenderConfig>>,
     ApiKey(_): ApiKey,
 ) -> StatusCode {
-    let v = file::get_all_files_recursively(&data);
+    let v = file::get_all_files_recursively(&data.server.media_path);
     for entry in v {
         let path = entry.path();
         let parent = path.parent().unwrap().to_str().unwrap();
         let filename = path.file_stem().unwrap().to_str().unwrap();
         let extension = path.extension().unwrap().to_str().unwrap();
-        if !file::DataType::from_state(extension.to_ascii_lowercase().as_str(), &data)
-            .is_type(file::DataType::Image)
+        if !file::DataType::from(extension.to_ascii_lowercase().as_str(), Some(&data))
+            .is_type(&file::DataType::Image)
         {
             continue;
         }

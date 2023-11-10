@@ -1,6 +1,7 @@
-use num_traits::{FromPrimitive, PrimInt};
+use serde::Deserialize;
+use std::ffi::OsStr;
 use std::fs;
-use std::path::{Path, MAIN_SEPARATOR_STR};
+use std::path::Path;
 use std::sync::Arc;
 use toml::Value;
 
@@ -20,7 +21,7 @@ impl LavenderFile {
     pub fn new<P: AsRef<Path>>(path: P) -> Self {
         let buffer = fs::read(&path).ok().unwrap_or_default();
         let datatype = match path.as_ref().extension() {
-            Some(ext) => DataType::from_extension(ext.to_ascii_lowercase().to_str().unwrap()),
+            Some(ext) => DataType::from(ext.to_ascii_lowercase().to_str().unwrap(), None),
             None => DataType::Unknown,
         };
         Self { buffer, datatype }
@@ -30,7 +31,7 @@ impl LavenderFile {
     /// * The file's buffer is not empty.
     /// * The file's data type is unknown.
     pub fn is_valid(&self) -> bool {
-        !self.buffer.is_empty() && !self.datatype.is_type(DataType::Unknown)
+        !self.buffer.is_empty() && !self.datatype.is_type(&DataType::Unknown)
     }
 
     /// Reads a media file and returns an HTML-friendly data `base64` string.
@@ -40,7 +41,7 @@ impl LavenderFile {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum DataType {
     Image,
     Video,
@@ -48,94 +49,108 @@ pub enum DataType {
     Unknown,
 }
 
-impl DataType {
-    pub fn from_extension(extension: &str) -> Self {
-        let toml = LavenderTOML::new();
-        let extension = Value::from(extension);
-
-        let image_exts = toml.get_array_value("extensions", "image").unwrap();
-        let video_exts = toml.get_array_value("extensions", "video").unwrap();
-        let audio_exts = toml.get_array_value("extensions", "audio").unwrap();
-
-        // Match against the extension lists
-        if image_exts.contains(&extension) {
-            Self::Image
-        } else if video_exts.contains(&extension) {
-            Self::Video
-        } else if audio_exts.contains(&extension) {
-            Self::Audio
-        } else {
-            Self::Unknown
-        }
-    }
-
-    pub fn from_state(extension: &str, state: &Arc<LavenderConfig>) -> Self {
-        let image_exts = &state.image_exts;
-        let video_exts = &state.video_exts;
-        let audio_exts = &state.audio_exts;
-
-        // Match against the extension lists
-        if image_exts.contains(&extension.to_owned()) {
-            Self::Image
-        } else if video_exts.contains(&extension.to_owned()) {
-            Self::Video
-        } else if audio_exts.contains(&extension.to_owned()) {
-            Self::Audio
-        } else {
-            Self::Unknown
-        }
-    }
-
-    pub fn is_type(&self, datatype: DataType) -> bool {
-        self.eq(&datatype)
+impl std::fmt::Display for DataType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match &self {
+                Self::Audio => "Audio",
+                Self::Image => "Image",
+                Self::Video => "Video",
+                Self::Unknown => "Unknown",
+            }
+        )
     }
 }
 
+impl DataType {
+    pub fn from<T: AsRef<OsStr>>(input: T, state: Option<&Arc<LavenderConfig>>) -> Self {
+        if input.as_ref().is_empty() {
+            return Self::Unknown;
+        }
+        let extension = input.as_ref().to_ascii_lowercase();
+        let t = match state {
+            Some(s) => {
+                let image_exts = &s.extensions.image;
+                let video_exts = &s.extensions.video;
+                let audio_exts = &s.extensions.audio;
+
+                let search = format!("{}", extension.to_string_lossy());
+
+                // Match against the extension lists
+                if image_exts.contains(&search) {
+                    Self::Image
+                } else if video_exts.contains(&search) {
+                    Self::Video
+                } else if audio_exts.contains(&search) {
+                    Self::Audio
+                } else {
+                    Self::Unknown
+                }
+            }
+            None => {
+                let toml = LavenderTOML::new();
+                let extension = Value::String(extension.to_string_lossy().to_string());
+
+                let image_exts = toml.get_array_value("extensions", "image").unwrap();
+                let video_exts = toml.get_array_value("extensions", "video").unwrap();
+                let audio_exts = toml.get_array_value("extensions", "audio").unwrap();
+
+                // Match against the extension lists
+                if image_exts.contains(&extension) {
+                    Self::Image
+                } else if video_exts.contains(&extension) {
+                    Self::Video
+                } else if audio_exts.contains(&extension) {
+                    Self::Audio
+                } else {
+                    Self::Unknown
+                }
+            }
+        };
+        if t.is_type(&Self::Unknown) {
+            match extension.to_str().unwrap_or_default() {
+                "image" => Self::Image,
+                "video" => Self::Video,
+                "audio" => Self::Audio,
+                _ => Self::Unknown,
+            }
+        } else {
+            t
+        }
+    }
+    pub fn is_type(&self, datatype: &DataType) -> bool {
+        self.eq(datatype)
+    }
+}
+
+#[derive(Deserialize)]
 pub struct LavenderConfig {
+    pub server: ServerConfig,
+    pub extensions: ExtensionsConfig,
+}
+
+#[derive(Deserialize)]
+pub struct ServerConfig {
     pub port: u16,
     pub media_path: String,
+}
 
-    pub image_exts: Vec<String>,
-    pub video_exts: Vec<String>,
-    pub audio_exts: Vec<String>,
+#[derive(Deserialize)]
+pub struct ExtensionsConfig {
+    pub image: Vec<String>,
+    pub video: Vec<String>,
+    pub audio: Vec<String>,
 }
 
 impl LavenderConfig {
     pub fn new() -> Self {
-        let toml = LavenderTOML::new();
-        let media_path = toml
-            .get_string_value("config", "media_path")
-            .unwrap()
-            .replace('/', MAIN_SEPARATOR_STR);
-
-        let port = toml.get_number_value::<u16>("config", "port").unwrap();
-
-        let image_exts: Vec<String> = toml
-            .get_array_value("extensions", "image")
-            .unwrap()
-            .iter()
-            .map(|v| v.to_string())
-            .collect();
-        let video_exts: Vec<String> = toml
-            .get_array_value("extensions", "video")
-            .unwrap()
-            .iter()
-            .map(|v| v.to_string())
-            .collect();
-        let audio_exts: Vec<String> = toml
-            .get_array_value("extensions", "audio")
-            .unwrap()
-            .iter()
-            .map(|v| v.to_string())
-            .collect();
-
-        Self {
-            port,
-            media_path,
-            image_exts,
-            video_exts,
-            audio_exts,
-        }
+        let toml_str =
+            fs::read_to_string("lavender.toml").expect("Failed to read configuration TOML");
+        let config: Self =
+            toml::from_str(&toml_str).expect("Failed to deserialize configuration TOML.");
+        config
     }
 }
 pub struct LavenderTOML(Value);
@@ -149,32 +164,15 @@ impl LavenderTOML {
         Self(toml_file)
     }
 
-    pub fn get_string_value(&self, table: &str, value: &str) -> Option<String> {
-        let t = self.0[table].as_table().unwrap();
-        t[value].as_str().map(|v| v.to_owned())
-    }
-
-    #[allow(dead_code)]
-    pub fn get_number_value<T: PrimInt + FromPrimitive>(
-        &self,
-        table: &str,
-        value: &str,
-    ) -> Option<T> {
-        let t = self.0[table].as_table().unwrap();
-        match t[value].as_integer() {
-            Some(n) => FromPrimitive::from_i64(n),
-            None => None,
-        }
-    }
-
     pub fn get_array_value(&self, table: &str, value: &str) -> Option<Vec<Value>> {
-        let t = self.0[table].as_table().unwrap();
+        let t = self.0[table].as_table()?;
         t[value].as_array().map(|v| v.to_vec())
     }
 }
 
-pub fn get_all_files_recursively(state: &Arc<LavenderConfig>) -> Vec<walkdir::DirEntry> {
-    WalkDir::new(&state.media_path)
+pub fn get_all_files_recursively<P: AsRef<Path>>(root: P) -> Vec<walkdir::DirEntry> {
+    WalkDir::new(root)
+        .sort_by_file_name()
         .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| {

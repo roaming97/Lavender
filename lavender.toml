@@ -1,4 +1,4 @@
-[config]
+[server]
 port = 4173
 media_path = "./media"
 
