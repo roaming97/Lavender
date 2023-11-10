@@ -36,7 +36,16 @@ pub async fn get_file(
 }
 
 pub async fn file_amount(State(data): State<Arc<LavenderConfig>>, ApiKey(_): ApiKey) -> String {
-    file::get_all_files_recursively(&data.server.media_path)
+    file::scan_fs(&data.server.media_path, true)
+        .into_iter()
+        .filter(|f| {
+            !f.path()
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .contains(file::MASTER_FILE_SUFFIX)
+        })
+        .collect::<Vec<_>>()
         .len()
         .to_string()
 }
@@ -63,17 +72,15 @@ pub async fn get_latest_files(
     );
     let type_filter = file::DataType::from(query.filetype.unwrap_or_default(), Some(&data));
 
-    let mut walk: Vec<walkdir::DirEntry> = file::get_all_files_recursively(path)
+    let mut walk: Vec<walkdir::DirEntry> = file::scan_fs(path, false)
         .into_iter()
         .filter(|e| {
             let extension = e.path().extension().unwrap_or_default();
             let datatype = file::DataType::from(extension, Some(&data));
             if datatype.is_type(&file::DataType::Image)
-                && e.path().to_string_lossy().contains(&format!(
-                    "{}{}",
-                    file::MASTER_FILE_SUFFIX,
-                    extension.to_string_lossy()
-                ))
+                && e.file_name()
+                    .to_string_lossy()
+                    .contains(file::MASTER_FILE_SUFFIX)
             {
                 query.master
             } else if !type_filter.is_type(&file::DataType::Unknown) {
@@ -93,7 +100,6 @@ pub async fn get_latest_files(
     let mut output = String::new();
 
     for entry in walk {
-        println!("{}", &entry.path().to_string_lossy());
         let f = file::LavenderFile::new(entry.path());
         if !f.is_valid() {
             return Err(StatusCode::BAD_REQUEST);
@@ -109,7 +115,7 @@ pub async fn create_optimized_images(
     State(data): State<Arc<LavenderConfig>>,
     ApiKey(_): ApiKey,
 ) -> StatusCode {
-    let v = file::get_all_files_recursively(&data.server.media_path);
+    let v = file::scan_fs(&data.server.media_path, true);
     for entry in v {
         let path = entry.path();
         let parent = path.parent().unwrap().to_str().unwrap();

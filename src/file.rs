@@ -49,21 +49,6 @@ pub enum DataType {
     Unknown,
 }
 
-impl std::fmt::Display for DataType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match &self {
-                Self::Audio => "Audio",
-                Self::Image => "Image",
-                Self::Video => "Video",
-                Self::Unknown => "Unknown",
-            }
-        )
-    }
-}
-
 impl DataType {
     pub fn from<T: AsRef<OsStr>>(input: T, state: Option<&Arc<LavenderConfig>>) -> Self {
         if input.as_ref().is_empty() {
@@ -170,18 +155,22 @@ impl LavenderTOML {
     }
 }
 
-pub fn get_all_files_recursively<P: AsRef<Path>>(root: P) -> Vec<walkdir::DirEntry> {
+pub fn scan_fs<P: AsRef<Path>>(root: P, recursive: bool) -> Vec<walkdir::DirEntry> {
     WalkDir::new(root)
-        .sort_by_file_name()
+        .sort_by(|a, b| {
+            let a = a.metadata().unwrap().modified().unwrap();
+            let b = b.metadata().unwrap().modified().unwrap();
+            b.cmp(&a)
+        })
         .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| {
-            e.file_type().is_file()
-                && e.path().extension().is_some()
-                && e.file_name()
-                    .to_str()
-                    .map(|s| !s.starts_with('.') && !s.contains(MASTER_FILE_SUFFIX))
-                    .unwrap_or(false)
+            let file_check = e.file_type().is_file() && e.path().extension().is_some();
+            if recursive {
+                file_check
+            } else {
+                file_check && e.depth() <= 1
+            }
         })
         .collect()
 }
