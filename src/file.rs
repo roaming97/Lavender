@@ -118,6 +118,7 @@ pub struct LavenderConfig {
 
 #[derive(Deserialize)]
 pub struct ServerConfig {
+    pub address: String,
     pub port: u16,
     pub media_path: String,
 }

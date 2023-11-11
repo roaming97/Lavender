@@ -23,13 +23,14 @@ fn lavender(state: Arc<LavenderConfig>) -> Router {
 #[tokio::main]
 async fn main() {
     let config = LavenderConfig::new();
+    let address = config.server.address.to_owned();
     let port = config.server.port;
     let state = Arc::<LavenderConfig>::new(config);
 
     let lavender = lavender(state);
 
-    let address = &format!("127.0.0.1:{}", port).parse().unwrap();
-    axum::Server::bind(address)
+    let addr = &format!("{address}:{}", port).parse().unwrap();
+    axum::Server::bind(addr)
         .serve(lavender.into_make_service())
         .with_graceful_shutdown(shutdown_signal())
         .await
