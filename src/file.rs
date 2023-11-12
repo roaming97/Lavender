@@ -156,7 +156,11 @@ impl LavenderTOML {
     }
 }
 
-pub fn scan_fs<P: AsRef<Path>>(root: P, recursive: bool) -> Vec<walkdir::DirEntry> {
+pub fn scan_fs<P: AsRef<Path>>(
+    root: P,
+    recursive: bool,
+    include_master: bool,
+) -> Vec<walkdir::DirEntry> {
     WalkDir::new(root)
         .sort_by(|a, b| {
             let a = a.metadata().unwrap().modified().unwrap();
@@ -165,12 +169,17 @@ pub fn scan_fs<P: AsRef<Path>>(root: P, recursive: bool) -> Vec<walkdir::DirEntr
         })
         .into_iter()
         .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file() && e.path().extension().is_some())
+        .filter(|e| if recursive { true } else { e.depth() <= 1 })
         .filter(|e| {
-            let file_check = e.file_type().is_file() && e.path().extension().is_some();
-            if recursive {
-                file_check
+            if include_master {
+                true
             } else {
-                file_check && e.depth() <= 1
+                !e.path()
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .contains(MASTER_FILE_SUFFIX)
             }
         })
         .collect()

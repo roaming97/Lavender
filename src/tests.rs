@@ -78,35 +78,44 @@ async fn get_file_amount() {
 async fn latest_file_root_path() {
     let (text, status) = test("/latest?master=false", TEST_API_KEY).await;
     assert_eq!(status, StatusCode::OK);
-    assert!(test_base64_str(text.trim()))
+    assert!(test_base64_str(&text))
 }
 
 #[tokio::test]
 async fn latest_image_root_path() {
     let (text, status) = test("/latest?filetype=image&master=false", TEST_API_KEY).await;
     assert_eq!(status, StatusCode::OK);
-    assert!(test_base64_str(text.trim()))
+    assert!(test_base64_str(&text))
 }
 
 #[tokio::test]
 async fn latest_master_image_root_path() {
     let (text, status) = test("/latest?filetype=image&master=true", TEST_API_KEY).await;
     assert_eq!(status, StatusCode::OK);
-    assert!(test_base64_str(text.trim()))
+    assert!(test_base64_str(&text))
+}
+
+#[tokio::test]
+async fn latest_master_images_root_path() {
+    let (text, status) = test("/latest?count=3&filetype=image&master=true", TEST_API_KEY).await;
+    assert_eq!(status, StatusCode::OK);
+    for data in text.split('\n') {
+        assert!(test_base64_str(data))
+    }
 }
 
 #[tokio::test]
 async fn latest_video_root_path() {
     let (text, status) = test("/latest?filetype=video&master=false", TEST_API_KEY).await;
     assert_eq!(status, StatusCode::OK);
-    assert!(test_base64_str(text.trim()))
+    assert!(test_base64_str(&text))
 }
 
 #[tokio::test]
 async fn latest_file_test_dir() {
     let (text, status) = test("/latest?relpath=/test_dir&master=false", TEST_API_KEY).await;
     assert_eq!(status, StatusCode::OK);
-    assert!(test_base64_str(text.trim()))
+    assert!(test_base64_str(&text))
 }
 
 #[tokio::test]
@@ -170,7 +179,7 @@ async fn latest_zero_files() {
     // will default to 1
     let (text, status) = test("/latest?count=0&master=false", TEST_API_KEY).await;
     assert_eq!(status, StatusCode::OK);
-    assert!(test_base64_str(text.trim()))
+    assert!(test_base64_str(&text))
 }
 
 #[tokio::test]
