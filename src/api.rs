@@ -60,7 +60,7 @@ impl FromRequestParts<Arc<AppState>> for ApiKey {
         if let Some(value) = parts.headers.get(&header_name) {
             let api_key = value.to_str().map_err(|_| ApiKeyError::Invalid).unwrap();
             if api_key.is_empty() {
-                return Err((StatusCode::UNAUTHORIZED, ApiKeyError::Empty))
+                return Err((StatusCode::UNAUTHORIZED, ApiKeyError::Empty));
             }
             let api_key = ApiKey(api_key.to_owned());
             let hash = &state.lavender_api_hash;

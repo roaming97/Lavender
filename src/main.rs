@@ -25,7 +25,7 @@ fn lavender(state: Arc<AppState>) -> Router {
 }
 
 #[shuttle_runtime::main]
-pub async fn axum(
+async fn axum(
     #[shuttle_secrets::Secrets] secrets: shuttle_secrets::SecretStore,
 ) -> shuttle_axum::ShuttleAxum {
     let config = LavenderConfig::new();
