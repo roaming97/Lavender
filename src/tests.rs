@@ -97,7 +97,7 @@ async fn latest_master_image_root_path() {
 
 #[tokio::test]
 async fn latest_master_images_root_path() {
-    let (text, status) = test("/latest?count=3&filetype=image&master=true", TEST_API_KEY).await;
+    let (text, status) = test("/latest?count=4&filetype=image&master=true", TEST_API_KEY).await;
     assert_eq!(status, StatusCode::OK);
     for data in text.split('\n') {
         assert!(test_base64_str(data))

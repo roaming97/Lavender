@@ -63,17 +63,15 @@ pub async fn get_latest_files(
     );
     let type_filter = file::DataType::from(query.filetype.unwrap_or_default(), Some(&data));
 
-    let mut walk: Vec<walkdir::DirEntry> = file::scan_fs(path, false, true)
+    let mut walk: Vec<walkdir::DirEntry> = file::scan_fs(path, false, query.master)
         .into_iter()
         .filter(|e| {
             let extension = e.path().extension().unwrap_or_default();
             let datatype = file::DataType::from(extension, Some(&data));
-            if datatype.is_type(&file::DataType::Image)
-                && e.file_name()
+            if datatype.is_type(&file::DataType::Image) && query.master {
+                e.file_name()
                     .to_string_lossy()
                     .contains(file::MASTER_FILE_SUFFIX)
-            {
-                query.master
             } else if !type_filter.is_type(&file::DataType::Unknown) {
                 datatype.is_type(&type_filter)
             } else {
