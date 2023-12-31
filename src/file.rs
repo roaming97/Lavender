@@ -9,7 +9,8 @@ use base64::engine::{GeneralPurpose, GeneralPurposeConfig};
 use base64::{alphabet, Engine};
 use walkdir::WalkDir;
 
-pub const MASTER_FILE_SUFFIX: &str = "_master.";
+pub const MASTER_IMAGE_SUFFIX: &str = "_master.";
+pub const VIDEO_THUMBNAIL_SUFFIX: &str = "_thumb.";
 
 pub struct LavenderFile {
     buffer: Vec<u8>,
@@ -179,7 +180,7 @@ pub fn scan_fs<P: AsRef<Path>>(
                     .file_name()
                     .unwrap()
                     .to_string_lossy()
-                    .contains(MASTER_FILE_SUFFIX)
+                    .contains(MASTER_IMAGE_SUFFIX)
             }
         })
         .collect()

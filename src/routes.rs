@@ -46,7 +46,8 @@ pub struct LatestFilesParams {
     count: Option<usize>,
     relpath: Option<String>,
     filetype: Option<String>,
-    master: bool,
+    offset: Option<usize>,
+    thumbnail: bool,
 }
 
 pub async fn get_latest_files(
@@ -63,15 +64,21 @@ pub async fn get_latest_files(
     );
     let type_filter = file::DataType::from(query.filetype.unwrap_or_default(), Some(&data));
 
-    let mut walk: Vec<walkdir::DirEntry> = file::scan_fs(path, false, query.master)
+    let mut walk: Vec<walkdir::DirEntry> = file::scan_fs(path, false, query.thumbnail)
         .into_iter()
         .filter(|e| {
             let extension = e.path().extension().unwrap_or_default();
             let datatype = file::DataType::from(extension, Some(&data));
-            if datatype.is_type(&file::DataType::Image) && query.master {
-                e.file_name()
-                    .to_string_lossy()
-                    .contains(file::MASTER_FILE_SUFFIX)
+            if datatype.is_type(&file::DataType::Image) && query.thumbnail {
+                if type_filter.is_type(&file::DataType::Image) {
+                    e.file_name()
+                        .to_string_lossy()
+                        .contains(file::MASTER_IMAGE_SUFFIX)
+                } else {
+                    e.file_name()
+                        .to_string_lossy()
+                        .contains(file::VIDEO_THUMBNAIL_SUFFIX)
+                }
             } else if !type_filter.is_type(&file::DataType::Unknown) {
                 datatype.is_type(&type_filter)
             } else {
@@ -80,11 +87,15 @@ pub async fn get_latest_files(
         })
         .collect();
 
-    if walk.is_empty() {
+    if walk.is_empty() || query.offset.unwrap_or_default() >= walk.len() {
         return Err(StatusCode::BAD_REQUEST);
     }
     let count = count.clamp(1, walk.len());
-    walk.truncate(count);
+    if let Some(offset) = query.offset {
+        walk = walk.drain(offset..count + offset).collect();
+    } else {
+        walk.truncate(count);
+    }
 
     let mut output = String::new();
 
@@ -121,7 +132,7 @@ pub async fn create_optimized_images(
             parent,
             path::MAIN_SEPARATOR,
             filename,
-            file::MASTER_FILE_SUFFIX,
+            file::MASTER_IMAGE_SUFFIX,
             extension
         );
         if path::Path::new(&target).exists() {
