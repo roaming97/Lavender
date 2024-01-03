@@ -1,65 +1,68 @@
-use std::path;
+use std::path::{self, Path};
 use std::sync::Arc;
 
 use crate::api::ApiKey;
 use crate::file;
-use crate::file::LavenderConfig;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::Result;
+use axum::Json;
 use image::{imageops, GenericImageView, ImageFormat};
-use serde::Deserialize;
+use serde::{Serialize, Deserialize};
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct GetFileParams {
-    path: String,
-    name_only: bool,
+    pub path: String,
 }
 
 pub async fn get_file(
-    State(data): State<Arc<LavenderConfig>>,
+    State(data): State<Arc<file::LavenderConfig>>,
     Query(query): Query<GetFileParams>,
     ApiKey(_): ApiKey,
-) -> Result<String, StatusCode> {
-    let path = path::Path::new(&query.path);
+) -> Result<Json<file::LavenderFile>, StatusCode> {
+    let path = Path::new(&query.path);
     let filepath = format!("{}/{}", &data.server.media_path, path.display());
-    let file = file::LavenderFile::new(filepath);
-
-    if file.is_valid() {
-        if query.name_only {
-            return Ok(path.file_name().unwrap().to_string_lossy().to_string());
-        }
-        Ok(file.read_base64())
-    } else {
-        Err(StatusCode::BAD_REQUEST)
+    match file::LavenderFile::new(filepath) {
+        Ok(file) => {
+            if file.is_valid() {
+                Ok(Json(file))
+            } else {
+                Err(StatusCode::BAD_REQUEST)
+            }
+        },
+        Err(_) => Err(StatusCode::NOT_FOUND)
     }
+
 }
 
-pub async fn file_amount(State(data): State<Arc<LavenderConfig>>, ApiKey(_): ApiKey) -> String {
+pub async fn file_amount(
+    State(data): State<Arc<file::LavenderConfig>>,
+    ApiKey(_): ApiKey,
+) -> String {
     file::scan_fs(&data.server.media_path, true, false)
         .len()
         .to_string()
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 pub struct LatestFilesParams {
-    count: Option<usize>,
-    relpath: Option<String>,
-    filetype: Option<String>,
-    offset: Option<usize>,
-    thumbnail: bool,
+    pub count: Option<usize>,
+    pub relpath: Option<String>,
+    pub filetype: Option<String>,
+    pub offset: Option<usize>,
+    pub thumbnail: bool,
 }
 
 pub async fn get_latest_files(
-    State(data): State<Arc<LavenderConfig>>,
+    State(data): State<Arc<file::LavenderConfig>>,
     Query(query): Query<LatestFilesParams>,
     ApiKey(_): ApiKey,
-) -> Result<String, StatusCode> {
+) -> Result<Json<Vec<file::LavenderFile>>, StatusCode> {
     let count = query.count.unwrap_or(1);
     let path = format!(
         "{}{}{}",
         &data.server.media_path,
-        path::MAIN_SEPARATOR,
+        std::path::MAIN_SEPARATOR,
         &query.relpath.unwrap_or_default()
     );
     let type_filter = file::DataType::from(query.filetype.unwrap_or_default(), Some(&data));
@@ -96,24 +99,24 @@ pub async fn get_latest_files(
     } else {
         walk.truncate(count);
     }
-
-    let mut output = String::new();
+    
+    let mut output = Vec::<file::LavenderFile>::new();
 
     for entry in walk {
-        println!("{}", entry.path().display());
-        let f = file::LavenderFile::new(entry.path());
-        if !f.is_valid() {
-            return Err(StatusCode::BAD_REQUEST);
+        // println!("{}", entry.path().display());
+        if let Ok(f) = file::LavenderFile::new(entry.path()) {
+            if !f.is_valid() {
+                return Err(StatusCode::BAD_REQUEST);
+            }
+            output.push(f);
         }
-        output.push_str(&format!("{}\n", f.read_base64()));
     }
 
-    let output = output.trim_end().to_owned();
-    Ok(output)
+    Ok(Json(output))
 }
 
 pub async fn create_optimized_images(
-    State(data): State<Arc<LavenderConfig>>,
+    State(data): State<Arc<file::LavenderConfig>>,
     ApiKey(_): ApiKey,
 ) -> StatusCode {
     let v = file::scan_fs(&data.server.media_path, true, false);

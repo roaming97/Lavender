@@ -6,12 +6,14 @@ use std::sync::Arc;
 mod tests;
 
 use axum::{routing::get, Router};
+use color_eyre::eyre::Result;
 use file::LavenderConfig;
 use routes::*;
 use tokio::signal;
 
 /// A lavender blooms from the rusty soil.
-fn lavender(state: Arc<LavenderConfig>) -> Router {
+fn lavender(state: Arc<LavenderConfig>) -> Router
+{
     Router::new()
         .route("/amount", get(file_amount))
         .route("/file", get(get_file))
@@ -21,7 +23,7 @@ fn lavender(state: Arc<LavenderConfig>) -> Router {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
     let config = LavenderConfig::new();
     let address = config.server.address.to_owned();
     let port = config.server.port;
@@ -29,12 +31,12 @@ async fn main() {
 
     let lavender = lavender(state);
 
-    let addr = &format!("{address}:{}", port).parse().unwrap();
-    axum::Server::bind(addr)
-        .serve(lavender.into_make_service())
+    let listener = tokio::net::TcpListener::bind(format!("{address}:{}", port)).await?;
+    axum::serve(listener, lavender)
         .with_graceful_shutdown(shutdown_signal())
-        .await
-        .unwrap()
+        .await?;
+
+    Ok(())
 }
 
 async fn shutdown_signal() {

@@ -1,48 +1,67 @@
-use serde::Deserialize;
 use std::ffi::OsStr;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use toml::Value;
+use std::time::SystemTime;
 
 use base64::engine::{GeneralPurpose, GeneralPurposeConfig};
 use base64::{alphabet, Engine};
+use color_eyre::eyre::Result;
+use serde::{Deserialize, Serialize};
+use toml::Value;
 use walkdir::WalkDir;
 
 pub const MASTER_IMAGE_SUFFIX: &str = "_master.";
 pub const VIDEO_THUMBNAIL_SUFFIX: &str = "_thumb.";
 
+#[derive(Debug, Serialize, Deserialize)]
 pub struct LavenderFile {
-    buffer: Vec<u8>,
+    pub path: PathBuf,
+    pub b64: String,
     datatype: DataType,
+    filename: String,
+    date: SystemTime,
 }
 
 impl LavenderFile {
     /// Creates a new media file.
-    pub fn new<P: AsRef<Path>>(path: P) -> Self {
-        let buffer = fs::read(&path).ok().unwrap_or_default();
-        let datatype = match path.as_ref().extension() {
+    pub fn new<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let path = path.as_ref().to_path_buf();
+        let buffer = fs::read(&path)?;
+        let datatype = match path.extension() {
             Some(ext) => DataType::from(ext.to_ascii_lowercase().to_str().unwrap(), None),
             None => DataType::Unknown,
         };
-        Self { buffer, datatype }
+        let b64 = GeneralPurpose::new(&alphabet::STANDARD, GeneralPurposeConfig::default())
+            .encode(buffer);
+        let filename = path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+        let date = path.metadata()?.modified()?;
+
+        Ok(Self {
+            path,
+            datatype,
+            b64,
+            filename,
+            date,
+        })
     }
 
-    /// Ckecks that:
-    /// * The file's buffer is not empty.
-    /// * The file's data type is unknown.
+    /// Checks that:
+    /// * The file's data type is known.
+    /// * The file's base64 data is not empty.
+    /// * The file's has a name.
     pub fn is_valid(&self) -> bool {
-        !self.buffer.is_empty() && !self.datatype.is_type(&DataType::Unknown)
-    }
-
-    /// Reads a media file and returns an HTML-friendly data `base64` string.
-    pub fn read_base64(&self) -> String {
-        let engine = GeneralPurpose::new(&alphabet::STANDARD, GeneralPurposeConfig::default());
-        engine.encode(&self.buffer)
+        !self.datatype.is_type(&DataType::Unknown)
+            && !self.b64.is_empty()
+            && !self.filename.is_empty()
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum DataType {
     Image,
     Video,
