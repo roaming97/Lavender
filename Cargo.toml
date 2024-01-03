@@ -14,8 +14,7 @@ axum = { version = "0.7.3", features = ["macros", "query"] }
 serde = { version = "1.0.189", features = ["derive"] }
 hyper = { version = "1.1.0", features = ["full"] }
 color-eyre = "0.6.2"
-axum-test = "14.2.2"
 serde_json = "1.0.110"
 
 [dev-dependencies]
-tower = { version = "0.4.13", features = ["util"] }
+axum-test = "14.2.2"
