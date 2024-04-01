@@ -12,13 +12,11 @@ use routes::*;
 use tokio::signal;
 
 /// A lavender blooms from the rusty soil.
-fn lavender(state: Arc<LavenderConfig>) -> Router
-{
+fn lavender(state: Arc<LavenderConfig>) -> Router {
     Router::new()
         .route("/amount", get(file_amount))
         .route("/file", get(get_file))
         .route("/latest", get(get_latest_files))
-        .route("/optimize", get(create_optimized_images))
         .with_state(state)
 }
 

@@ -4,8 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-base64 = "0.21.0"
-image = "0.24.5"
+base64 = "0.22.0"
 sha3 = "0.10.6"
 toml = "0.8.1"
 walkdir = "2.4.0"

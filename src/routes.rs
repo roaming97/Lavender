@@ -1,4 +1,4 @@
-use std::path::{self, Path};
+use std::path::Path;
 use std::sync::Arc;
 
 use crate::api::ApiKey;
@@ -7,8 +7,7 @@ use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::Result;
 use axum::Json;
-use image::{imageops, GenericImageView, ImageFormat};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 pub struct GetFileParams {
@@ -29,17 +28,16 @@ pub async fn get_file(
             } else {
                 Err(StatusCode::BAD_REQUEST)
             }
-        },
-        Err(_) => Err(StatusCode::NOT_FOUND)
+        }
+        Err(_) => Err(StatusCode::NOT_FOUND),
     }
-
 }
 
 pub async fn file_amount(
     State(data): State<Arc<file::LavenderConfig>>,
     ApiKey(_): ApiKey,
 ) -> String {
-    file::scan_fs(&data.server.media_path, true, false)
+    file::scan_fs(&data.server.media_path, true)
         .len()
         .to_string()
 }
@@ -67,21 +65,16 @@ pub async fn get_latest_files(
     );
     let type_filter = file::DataType::from(query.filetype.unwrap_or_default(), Some(&data));
 
-    let mut walk: Vec<walkdir::DirEntry> = file::scan_fs(path, false, query.thumbnail)
+    let mut walk: Vec<walkdir::DirEntry> = file::scan_fs(path, true)
         .into_iter()
         .filter(|e| {
             let extension = e.path().extension().unwrap_or_default();
             let datatype = file::DataType::from(extension, Some(&data));
-            if datatype.is_type(&file::DataType::Image) && query.thumbnail {
-                if type_filter.is_type(&file::DataType::Image) {
-                    e.file_name()
-                        .to_string_lossy()
-                        .contains(file::MASTER_IMAGE_SUFFIX)
-                } else {
-                    e.file_name()
-                        .to_string_lossy()
-                        .contains(file::VIDEO_THUMBNAIL_SUFFIX)
-                }
+            if !datatype.is_type(&file::DataType::Audio) && query.thumbnail {
+                if let Some(dirname) = e.path().parent() {
+                    return dirname.to_string_lossy().into_owned().contains("thumbnails");
+                } 
+                false
             } else if !type_filter.is_type(&file::DataType::Unknown) {
                 datatype.is_type(&type_filter)
             } else {
@@ -99,7 +92,7 @@ pub async fn get_latest_files(
     } else {
         walk.truncate(count);
     }
-    
+
     let mut output = Vec::<file::LavenderFile>::new();
 
     for entry in walk {
@@ -113,54 +106,4 @@ pub async fn get_latest_files(
     }
 
     Ok(Json(output))
-}
-
-pub async fn create_optimized_images(
-    State(data): State<Arc<file::LavenderConfig>>,
-    ApiKey(_): ApiKey,
-) -> StatusCode {
-    let v = file::scan_fs(&data.server.media_path, true, false);
-    for entry in v {
-        let path = entry.path();
-        let parent = path.parent().unwrap().to_str().unwrap();
-        let filename = path.file_stem().unwrap().to_str().unwrap();
-        let extension = path.extension().unwrap().to_str().unwrap();
-        if !file::DataType::from(extension.to_ascii_lowercase().as_str(), Some(&data))
-            .is_type(&file::DataType::Image)
-        {
-            continue;
-        }
-        let target = format!(
-            "{}{}{}{}{}",
-            parent,
-            path::MAIN_SEPARATOR,
-            filename,
-            file::MASTER_IMAGE_SUFFIX,
-            extension
-        );
-        if path::Path::new(&target).exists() {
-            continue;
-        } else {
-            match image::open(path) {
-                Ok(i) => {
-                    let (w, h) = i.dimensions();
-                    if w > 640 || h > 640 {
-                        let nwidth = (w as f32 * 0.25) as u32;
-                        let nheight = (h as f32 * 0.25) as u32;
-                        let img = i.resize(nwidth, nheight, imageops::FilterType::CatmullRom);
-                        img.save_with_format(target, ImageFormat::Png).unwrap();
-                    }
-                }
-                Err(e) => {
-                    println!(
-                        "Failed to open \'{}\': {}",
-                        entry.path().to_str().unwrap(),
-                        e
-                    );
-                    return StatusCode::INTERNAL_SERVER_ERROR;
-                }
-            }
-        }
-    }
-    StatusCode::OK
 }

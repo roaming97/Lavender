@@ -11,8 +11,8 @@ use serde::{Deserialize, Serialize};
 use toml::Value;
 use walkdir::WalkDir;
 
-pub const MASTER_IMAGE_SUFFIX: &str = "_master.";
-pub const VIDEO_THUMBNAIL_SUFFIX: &str = "_thumb.";
+// pub const MASTER_IMAGE_SUFFIX: &str = "_master.";
+// pub const VIDEO_THUMBNAIL_SUFFIX: &str = "_thumb.";
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LavenderFile {
@@ -176,11 +176,7 @@ impl LavenderTOML {
     }
 }
 
-pub fn scan_fs<P: AsRef<Path>>(
-    root: P,
-    recursive: bool,
-    include_master: bool,
-) -> Vec<walkdir::DirEntry> {
+pub fn scan_fs<P: AsRef<Path>>(root: P, recursive: bool) -> Vec<walkdir::DirEntry> {
     WalkDir::new(root)
         .sort_by(|a, b| {
             let a = a.metadata().unwrap().modified().unwrap();
@@ -191,16 +187,5 @@ pub fn scan_fs<P: AsRef<Path>>(
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_file() && e.path().extension().is_some())
         .filter(|e| if recursive { true } else { e.depth() <= 1 })
-        .filter(|e| {
-            if include_master {
-                true
-            } else {
-                !e.path()
-                    .file_name()
-                    .unwrap()
-                    .to_string_lossy()
-                    .contains(MASTER_IMAGE_SUFFIX)
-            }
-        })
         .collect()
 }

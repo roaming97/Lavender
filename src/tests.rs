@@ -53,7 +53,7 @@ async fn test<Q: serde::Serialize>(route: &str, query: Q, key: Option<&str>) -> 
 #[tokio::test]
 async fn get_single_file() {
     let query = GetFileParams {
-        path: "day1_master.png".into(),
+        path: "./thumbnails/day1.webp".into(),
     };
     let response = test("/file", query, TEST_API_KEY).await;
     response.assert_status_ok();
