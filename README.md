@@ -25,7 +25,7 @@ $ git clone https://github.com/roaming97/Lavender.git
 
 Add a folder with your images. As an example, the file structure could be:
 ```
-├───atwork📁
+├───artwork
   └───thumbnails
 ├───photo
 │   └───thumbnails
@@ -93,4 +93,4 @@ $ cargo run --release
 
 ## Contributing
 
-This is meant to be a personal tool more than a standalone crate. Pull requests will not be merged into this repository but feel free to fork it and make your own version!
+This is meant to be a personal tool more than a standalone crate, it's not looking to be the most performant, just convenient for my use case. Pull requests will not be merged into this repository but feel free to fork it and make your own version!
