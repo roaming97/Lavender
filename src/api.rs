@@ -18,7 +18,6 @@ pub enum KeyError {
     Missing,
     Empty,
     Invalid,
-    MissingEnv,
 }
 
 impl IntoResponse for KeyError {
