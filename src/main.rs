@@ -7,11 +7,9 @@ mod tests;
 
 use axum::{routing::get, Router};
 use routes::{file_amount, get_file, get_latest_files};
-use serde::{Deserialize, Serialize};
 use shuttle_axum::ShuttleAxum;
 use shuttle_runtime::SecretStore;
 
-#[derive(Deserialize, Serialize, Clone)]
 pub struct ShuttleState {
     pub config: Config,
     pub secrets: SecretStore
@@ -27,7 +25,7 @@ impl ShuttleState {
 }
 
 /// Server configuration structure, deserializes `lavender.toml` into it.
-#[derive(Serialize, Deserialize, Default, Clone)]
+#[derive(serde::Deserialize, Default)]
 pub struct Config {
     pub address: String,
     pub port: u16,
