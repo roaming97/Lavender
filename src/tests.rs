@@ -1,4 +1,4 @@
-use std::env;
+use std::collections::BTreeMap;
 
 use crate::file::LavenderEntry;
 use crate::routes::*;
@@ -27,15 +27,16 @@ fn test_base64_str(s: &str) -> bool {
 /// It returns a `TestResponse`.
 async fn test<Q: serde::Serialize>(route: &str, query: Q, key: Option<&str>) -> TestResponse {
     let config = Config::new();
-    let state = Arc::<Config>::new(config);
-
-    let lavender = lavender(state);
-    let server = TestServer::new(lavender).unwrap();
-
-    env::set_var(
+    let mut btree = BTreeMap::new();
+    btree.insert(
         "LAVENDER_API_HASH",
         "0c508a046e5d93c3405af45332680a7aa3155f43858d009e106a6a4c67ed85c1",
     );
+    let secrets = SecretStore::new(BTreeMap::new());
+    let state = Arc::<ShuttleState>::new(ShuttleState::new(config, secrets));
+
+    let lavender = lavender(state);
+    let server = TestServer::new(lavender).unwrap();
 
     server
         .get(route)

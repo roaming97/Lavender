@@ -6,9 +6,9 @@ use axum::{
 };
 use serde::Deserialize;
 use sha3::{Digest, Sha3_256};
-use std::{env, sync::Arc};
+use std::sync::Arc;
 
-use crate::Config;
+use crate::ShuttleState;
 
 #[derive(Debug, PartialEq, Eq, Deserialize)]
 pub struct Key(pub String);
@@ -42,16 +42,11 @@ impl IntoResponse for KeyError {
 
 impl Key {
     /// Checks if the API key is valid by testing it against a hash.
-    fn validate(&self) -> Result<(), KeyError> {
+    fn validate(&self, hash: &str) -> Result<(), KeyError> {
         let k = &self.0;
         if k.is_empty() {
             return Err(KeyError::Empty);
         }
-
-        let Ok(hash) = env::var("LAVENDER_API_HASH") else {
-            eprintln!("Lavender API hash is missing from environment variables!");
-            return Err(KeyError::MissingEnv);
-        };
 
         if format!("{:x}", Sha3_256::digest(k.as_bytes())) == hash {
             Ok(())
@@ -62,12 +57,12 @@ impl Key {
 }
 
 #[async_trait]
-impl FromRequestParts<Arc<Config>> for Key {
+impl FromRequestParts<Arc<ShuttleState>> for Key {
     type Rejection = (StatusCode, KeyError);
 
     async fn from_request_parts(
         parts: &mut Parts,
-        _state: &Arc<Config>,
+        state: &Arc<ShuttleState>,
     ) -> Result<Self, Self::Rejection> {
         let header_name = HeaderName::from_static("lav-api-key");
         if let Some(value) = parts.headers.get(&header_name) {
@@ -76,9 +71,14 @@ impl FromRequestParts<Arc<Config>> for Key {
                 return Err((StatusCode::UNAUTHORIZED, KeyError::Empty));
             }
             let api_key = Self(api_key.to_owned());
-            match api_key.validate() {
-                Ok(()) => Ok(api_key),
-                Err(e) => Err((StatusCode::BAD_REQUEST, e)),
+            if let Some(hash) = state.secrets.get("LAVENDER_API_HASH") {
+                match api_key.validate(&hash) {
+                    Ok(()) => Ok(api_key),
+                    Err(e) => Err((StatusCode::BAD_REQUEST, e)),
+                }
+            } else {
+                eprintln!("Lavender API key is missing from Secrets.toml!");
+                Err((StatusCode::BAD_REQUEST, KeyError::MissingEnv))
             }
         } else {
             Err((StatusCode::UNAUTHORIZED, KeyError::Missing))

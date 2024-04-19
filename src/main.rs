@@ -6,12 +6,28 @@ use std::sync::Arc;
 mod tests;
 
 use axum::{routing::get, Router};
-use color_eyre::eyre::Result;
 use routes::{file_amount, get_file, get_latest_files};
-use tokio::signal;
+use serde::{Deserialize, Serialize};
+use shuttle_axum::ShuttleAxum;
+use shuttle_runtime::SecretStore;
+
+#[derive(Deserialize, Serialize, Clone)]
+pub struct ShuttleState {
+    pub config: Config,
+    pub secrets: SecretStore
+}
+
+impl ShuttleState {
+    pub fn new(config: Config, secrets: SecretStore) -> Self {
+        Self {
+            config,
+            secrets
+        }
+    }
+}
 
 /// Server configuration structure, deserializes `lavender.toml` into it.
-#[derive(serde::Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, Clone)]
 pub struct Config {
     pub address: String,
     pub port: u16,
@@ -34,7 +50,7 @@ impl Config {
 }
 
 /// A lavender blooms from the soil.
-fn lavender(state: Arc<Config>) -> Router {
+fn lavender(state: Arc<ShuttleState>) -> Router {
     Router::new()
         .route("/amount", get(file_amount))
         .route("/file", get(get_file))
@@ -42,45 +58,12 @@ fn lavender(state: Arc<Config>) -> Router {
         .with_state(state)
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+#[shuttle_runtime::main]
+pub async fn axum(#[shuttle_runtime::Secrets] secrets: SecretStore) -> ShuttleAxum {
     let config = Config::new();
-    let address = config.address.clone();
-    let port = config.port;
-    let state = Arc::<Config>::new(config);
+    let state = Arc::<ShuttleState>::new(ShuttleState::new(config, secrets));
 
     let lavender = lavender(state);
 
-    let listener = tokio::net::TcpListener::bind(format!("{address}:{port}")).await?;
-    axum::serve(listener, lavender)
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
-
-    Ok(())
-}
-
-async fn shutdown_signal() {
-    let ctrl_c = async {
-        signal::ctrl_c()
-            .await
-            .expect("failed to install Ctrl+C handler");
-    };
-
-    #[cfg(unix)]
-    let terminate = async {
-        signal::unix::signal(signal::unix::SignalKind::terminate())
-            .expect("failed to install signal handler")
-            .recv()
-            .await;
-    };
-
-    #[cfg(not(unix))]
-    let terminate = std::future::pending::<()>();
-
-    tokio::select! {
-        () = ctrl_c => {},
-        () = terminate => {},
-    }
-
-    println!("Detected Ctrl+C, shutting down gracefully");
+    Ok(lavender.into())
 }

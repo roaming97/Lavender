@@ -2,7 +2,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::api::Key;
-use crate::{file, Config};
+use crate::{file, ShuttleState};
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::Result;
@@ -15,12 +15,12 @@ pub struct GetFileParams {
 }
 
 pub async fn get_file(
-    State(data): State<Arc<Config>>,
+    State(data): State<Arc<ShuttleState>>,
     Query(query): Query<GetFileParams>,
     Key(_): Key,
 ) -> Result<Json<file::LavenderEntry>, StatusCode> {
     let path = Path::new(&query.path);
-    let filepath = format!("{}/{}", &data.media_path, path.display());
+    let filepath = format!("{}/{}", &data.config.media_path, path.display());
     file::LavenderEntry::new(filepath).map_or(Err(StatusCode::NOT_FOUND), |file| {
         if file.is_valid() {
             Ok(Json(file))
@@ -30,8 +30,8 @@ pub async fn get_file(
     })
 }
 
-pub async fn file_amount(State(data): State<Arc<Config>>, Key(_): Key) -> String {
-    file::scan_fs(&data.media_path, true)
+pub async fn file_amount(State(data): State<Arc<ShuttleState>>, Key(_): Key) -> String {
+    file::scan_fs(&data.config.media_path, true)
         .into_iter()
         .filter(|f| f.path().extension().unwrap_or_default().ne("webp"))
         .count()
@@ -47,14 +47,14 @@ pub struct LatestFilesParams {
 }
 
 pub async fn get_latest_files(
-    State(data): State<Arc<Config>>,
+    State(data): State<Arc<ShuttleState>>,
     Query(query): Query<LatestFilesParams>,
     Key(_): Key,
 ) -> Result<Json<Vec<file::LavenderEntry>>, StatusCode> {
     let count = query.count.unwrap_or(1);
     let path = format!(
         "{}{}{}",
-        &data.media_path,
+        &data.config.media_path,
         std::path::MAIN_SEPARATOR,
         &query.relpath.unwrap_or_default()
     );
