@@ -71,6 +71,7 @@ impl FromRequestParts<Arc<ShuttleState>> for Key {
                 return Err((StatusCode::UNAUTHORIZED, KeyError::Empty));
             }
             let api_key = Self(api_key.to_owned());
+
             if let Some(hash) = state.secrets.get("LAVENDER_API_HASH") {
                 match api_key.validate(&hash) {
                     Ok(()) => Ok(api_key),
@@ -80,6 +81,7 @@ impl FromRequestParts<Arc<ShuttleState>> for Key {
                 eprintln!("Lavender API key is missing from Secrets.toml!");
                 Err((StatusCode::BAD_REQUEST, KeyError::MissingEnv))
             }
+
         } else {
             Err((StatusCode::UNAUTHORIZED, KeyError::Missing))
         }

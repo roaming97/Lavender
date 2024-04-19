@@ -16,16 +16,16 @@ pub struct ShuttleState {
 }
 
 impl ShuttleState {
-    pub fn new(config: Config, secrets: SecretStore) -> Self {
+    pub fn new(config: &Config, secrets: &SecretStore) -> Self {
         Self {
-            config,
-            secrets
+            config: config.clone(),
+            secrets: secrets.clone()
         }
     }
 }
 
 /// Server configuration structure, deserializes `lavender.toml` into it.
-#[derive(serde::Deserialize, Default)]
+#[derive(serde::Deserialize, Default, Clone)]
 pub struct Config {
     pub address: String,
     pub port: u16,
@@ -59,7 +59,7 @@ fn lavender(state: Arc<ShuttleState>) -> Router {
 #[shuttle_runtime::main]
 pub async fn axum(#[shuttle_runtime::Secrets] secrets: SecretStore) -> ShuttleAxum {
     let config = Config::new();
-    let state = Arc::<ShuttleState>::new(ShuttleState::new(config, secrets));
+    let state = Arc::<ShuttleState>::new(ShuttleState::new(&config, &secrets));
 
     let lavender = lavender(state);
 

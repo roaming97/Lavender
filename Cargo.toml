@@ -17,6 +17,7 @@ serde_json = "1.0.110"
 infer = "0.15.0"
 shuttle-runtime = "0.43.0"
 shuttle-axum = "0.43.0"
+shuttle-common = "0.43.0"
 
 [dev-dependencies]
 axum-test = "14.2.2"

@@ -9,6 +9,7 @@ use axum_test::{TestResponse, TestServer};
 use base64::engine::{GeneralPurpose, GeneralPurposeConfig};
 use base64::{alphabet, Engine};
 use serde_json::json;
+use shuttle_common::Secret;
 
 const TEST_API_KEY: Option<&str> = Some("TEST_KEY");
 
@@ -29,11 +30,11 @@ async fn test<Q: serde::Serialize>(route: &str, query: Q, key: Option<&str>) -> 
     let config = Config::new();
     let mut btree = BTreeMap::new();
     btree.insert(
-        "LAVENDER_API_HASH",
-        "0c508a046e5d93c3405af45332680a7aa3155f43858d009e106a6a4c67ed85c1",
+        "LAVENDER_API_HASH".to_owned(),
+        Secret::new("0c508a046e5d93c3405af45332680a7aa3155f43858d009e106a6a4c67ed85c1".to_owned()),
     );
-    let secrets = SecretStore::new(BTreeMap::new());
-    let state = Arc::<ShuttleState>::new(ShuttleState::new(config, secrets));
+    let secrets = SecretStore::new(btree);
+    let state = Arc::<ShuttleState>::new(ShuttleState::new(&config, &secrets));
 
     let lavender = lavender(state);
     let server = TestServer::new(lavender).unwrap();
