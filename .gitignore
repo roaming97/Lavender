@@ -15,6 +15,7 @@ Cargo.lock
 
 # media folders
 media/
+*_media/
 media_*/
 
 # IDE

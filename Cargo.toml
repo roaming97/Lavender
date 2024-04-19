@@ -1,6 +1,6 @@
 [package]
 name = "lavender"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [dependencies]
@@ -14,6 +14,7 @@ serde = { version = "1.0.189", features = ["derive"] }
 hyper = { version = "1.1.0", features = ["full"] }
 color-eyre = "0.6.2"
 serde_json = "1.0.110"
+infer = "0.15.0"
 
 [dev-dependencies]
 axum-test = "14.2.2"

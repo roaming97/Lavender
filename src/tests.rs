@@ -1,6 +1,7 @@
 use std::env;
 
-use crate::file::LavenderFile;
+use crate::file::LavenderEntry;
+use crate::routes::*;
 
 use super::*;
 use axum_test::http::{HeaderName, HeaderValue};
@@ -14,7 +15,7 @@ const TEST_API_KEY: Option<&str> = Some("TEST_KEY");
 /// Tests against a base64 engine to check if the provided string is valid base64 data.
 fn test_base64_str(s: &str) -> bool {
     if s.is_empty() {
-        println!("Empty Base64 string!");
+        eprintln!("Empty Base64 string!");
         return false;
     }
     let engine = GeneralPurpose::new(&alphabet::STANDARD, GeneralPurposeConfig::default());
@@ -25,8 +26,8 @@ fn test_base64_str(s: &str) -> bool {
 ///
 /// It returns a `TestResponse`.
 async fn test<Q: serde::Serialize>(route: &str, query: Q, key: Option<&str>) -> TestResponse {
-    let config = LavenderConfig::new();
-    let state = Arc::<LavenderConfig>::new(config);
+    let config = Server::new();
+    let state = Arc::<Server>::new(config);
 
     let lavender = lavender(state);
     let server = TestServer::new(lavender).unwrap();
@@ -46,19 +47,19 @@ async fn test<Q: serde::Serialize>(route: &str, query: Q, key: Option<&str>) -> 
         .await
 }
 
-// * GENERAL TESTS
+// * ROUTE TESTS
 
 // /file
 
 #[tokio::test]
 async fn get_single_file() {
     let query = GetFileParams {
-        path: "./thumbnails/day1.webp".into(),
+        path: "./artwork/thumbnails/day1.webp".into(),
     };
     let response = test("/file", query, TEST_API_KEY).await;
     response.assert_status_ok();
-    let file = response.json::<LavenderFile>();
-    assert!(test_base64_str(&file.b64))
+    let file = response.json::<LavenderEntry>();
+    assert!(test_base64_str(&file.base64()))
 }
 
 // /amount
@@ -80,108 +81,108 @@ async fn latest_file_root_path() {
     };
     let response = test("/latest", query, TEST_API_KEY).await;
     response.assert_status_ok();
-    let files = response.json::<Vec<LavenderFile>>();
-    assert!(test_base64_str(&files[0].b64))
+    let files = response.json::<Vec<LavenderEntry>>();
+    assert!(test_base64_str(&files[0].base64()))
 }
 
 #[tokio::test]
 async fn multiple_latest_files_root_path() {
     let query = LatestFilesParams {
+        relpath: Some("/artwork".into()),
         count: Some(3),
         thumbnail: false,
         ..Default::default()
     };
     let response = test("/latest", query, TEST_API_KEY).await;
     response.assert_status_ok();
-    let files = response.json::<Vec<LavenderFile>>();
+    let files = response.json::<Vec<LavenderEntry>>();
     for file in files {
-        assert!(test_base64_str(&file.b64))
+        assert!(test_base64_str(&file.base64()))
     }
 }
 
 #[tokio::test]
 async fn latest_image_root_path() {
     let query = LatestFilesParams {
-        filetype: Some("image".into()),
+        relpath: Some("/artwork".into()),
         thumbnail: false,
         ..Default::default()
     };
     let response = test("/latest", query, TEST_API_KEY).await;
     response.assert_status_ok();
-    let files = response.json::<Vec<LavenderFile>>();
-    assert!(test_base64_str(&files[0].b64))
+    let files = response.json::<Vec<LavenderEntry>>();
+    assert!(test_base64_str(&files[0].base64()))
 }
 
 #[tokio::test]
-async fn latest_master_image_root_path() {
+async fn latest_thumbnail_root_path() {
     let query = LatestFilesParams {
-        filetype: Some("image".into()),
+        relpath: Some("/artwork".into()),
         thumbnail: true,
         ..Default::default()
     };
     let response = test("/latest", query, TEST_API_KEY).await;
     response.assert_status_ok();
-    let files = response.json::<Vec<LavenderFile>>();
-    assert!(test_base64_str(&files[0].b64))
+    let files = response.json::<Vec<LavenderEntry>>();
+    assert!(test_base64_str(&files[0].base64()))
 }
 
 #[tokio::test]
-async fn latest_master_images_root_path() {
+async fn latest_thumbnails_root_path() {
     let query = LatestFilesParams {
+        relpath: Some("/artwork/thumbnails".into()),
         count: Some(4),
-        filetype: Some("image".into()),
         thumbnail: true,
         ..Default::default()
     };
     let response = test("/latest", query, TEST_API_KEY).await;
     response.assert_status_ok();
-    let files = response.json::<Vec<LavenderFile>>();
+    let files = response.json::<Vec<LavenderEntry>>();
     for file in files {
-        assert!(test_base64_str(&file.b64))
+        assert!(test_base64_str(&file.base64()))
     }
 }
 
 #[tokio::test]
-async fn latest_master_images_root_path_with_offset() {
+async fn latest_thumbnails_root_path_with_offset() {
     let query = LatestFilesParams {
+        relpath: Some("/artwork/thumbnails".into()),
         count: Some(4),
-        filetype: Some("image".into()),
         thumbnail: true,
         offset: Some(2),
-        ..Default::default()
     };
     let response = test("/latest", query, TEST_API_KEY).await;
     response.assert_status_ok();
-    let files = response.json::<Vec<LavenderFile>>();
+    let files = response.json::<Vec<LavenderEntry>>();
     for file in files {
-        assert!(test_base64_str(&file.b64))
+        assert!(test_base64_str(&file.base64()))
     }
 }
 
 #[tokio::test]
 async fn latest_video_root_path() {
     let query = LatestFilesParams {
-        filetype: Some("video".into()),
+        relpath: Some("/video".into()),
         thumbnail: false,
         ..Default::default()
     };
     let response = test("/latest", query, TEST_API_KEY).await;
     response.assert_status_ok();
-    let files = response.json::<Vec<LavenderFile>>();
-    assert!(test_base64_str(&files[0].b64))
+    let files = response.json::<Vec<LavenderEntry>>();
+    assert!(test_base64_str(&files[0].base64()))
 }
 
 #[tokio::test]
 async fn latest_video_thumbnail_root_path() {
     let query = LatestFilesParams {
-        filetype: Some("video".into()),
+        relpath: Some("/video/thumbnails".into()),
         thumbnail: true,
         ..Default::default()
     };
     let response = test("/latest", query, TEST_API_KEY).await;
     response.assert_status_ok();
-    let files = response.json::<Vec<LavenderFile>>();
-    assert!(test_base64_str(&files[0].b64))
+    let files = response.json::<Vec<LavenderEntry>>();
+    assert!(test_base64_str(&files[0].base64()))
 }
 
 #[tokio::test]
@@ -193,8 +194,8 @@ async fn latest_file_test_dir() {
     };
     let response = test("/latest", query, TEST_API_KEY).await;
     response.assert_status_ok();
-    let files = response.json::<Vec<LavenderFile>>();
-    assert!(test_base64_str(&files[0].b64))
+    let files = response.json::<Vec<LavenderEntry>>();
+    assert!(test_base64_str(&files[0].base64()))
 }
 
 #[tokio::test]
@@ -207,9 +208,9 @@ async fn multiple_latest_files_test_dir() {
     };
     let response = test("/latest", query, TEST_API_KEY).await;
     response.assert_status_ok();
-    let files = response.json::<Vec<LavenderFile>>();
+    let files = response.json::<Vec<LavenderEntry>>();
     for file in files {
-        assert!(test_base64_str(&file.b64))
+        assert!(test_base64_str(&file.base64()))
     }
 }
 
@@ -267,8 +268,8 @@ async fn latest_zero_files() {
     };
     let response = test("/latest", query, TEST_API_KEY).await;
     response.assert_status_ok();
-    let files = response.json::<Vec<LavenderFile>>();
-    assert!(test_base64_str(&files[0].b64))
+    let files = response.json::<Vec<LavenderEntry>>();
+    assert!(test_base64_str(&files[0].base64()))
 }
 
 #[tokio::test]
