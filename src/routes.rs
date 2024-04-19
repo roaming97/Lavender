@@ -2,7 +2,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::api::Key;
-use crate::{file, Server};
+use crate::{file, Config};
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::Result;
@@ -15,7 +15,7 @@ pub struct GetFileParams {
 }
 
 pub async fn get_file(
-    State(data): State<Arc<Server>>,
+    State(data): State<Arc<Config>>,
     Query(query): Query<GetFileParams>,
     Key(_): Key,
 ) -> Result<Json<file::LavenderEntry>, StatusCode> {
@@ -30,7 +30,7 @@ pub async fn get_file(
     })
 }
 
-pub async fn file_amount(State(data): State<Arc<Server>>, Key(_): Key) -> String {
+pub async fn file_amount(State(data): State<Arc<Config>>, Key(_): Key) -> String {
     file::scan_fs(&data.media_path, true)
         .into_iter()
         .filter(|f| f.path().extension().unwrap_or_default().ne("webp"))
@@ -47,7 +47,7 @@ pub struct LatestFilesParams {
 }
 
 pub async fn get_latest_files(
-    State(data): State<Arc<Server>>,
+    State(data): State<Arc<Config>>,
     Query(query): Query<LatestFilesParams>,
     Key(_): Key,
 ) -> Result<Json<Vec<file::LavenderEntry>>, StatusCode> {

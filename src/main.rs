@@ -10,15 +10,20 @@ use color_eyre::eyre::Result;
 use routes::{file_amount, get_file, get_latest_files};
 use tokio::signal;
 
-/// Server configuration structure, ddeserializes `lavender.toml`.
+/// Server configuration structure, deserializes `lavender.toml` into it.
 #[derive(serde::Deserialize, Default)]
-pub struct Server {
+pub struct Config {
     pub address: String,
     pub port: u16,
     pub media_path: String,
 }
 
-impl Server {
+impl Config {
+    #[must_use]
+    /// Creates a new Lavender configuration from a `lavender.toml` file.
+    /// # Panics
+    ///
+    /// Will panic if there is no `lavender.toml` found at the root directory of the project.
     pub fn new() -> Self {
         let toml_str =
             std::fs::read_to_string("lavender.toml").expect("Failed to read configuration TOML");
@@ -29,7 +34,7 @@ impl Server {
 }
 
 /// A lavender blooms from the soil.
-fn lavender(state: Arc<Server>) -> Router {
+fn lavender(state: Arc<Config>) -> Router {
     Router::new()
         .route("/amount", get(file_amount))
         .route("/file", get(get_file))
@@ -39,10 +44,10 @@ fn lavender(state: Arc<Server>) -> Router {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let config = Server::new();
+    let config = Config::new();
     let address = config.address.clone();
     let port = config.port;
-    let state = Arc::<Server>::new(config);
+    let state = Arc::<Config>::new(config);
 
     let lavender = lavender(state);
 

@@ -8,7 +8,7 @@ use serde::Deserialize;
 use sha3::{Digest, Sha3_256};
 use std::{env, sync::Arc};
 
-use crate::Server;
+use crate::Config;
 
 #[derive(Debug, PartialEq, Eq, Deserialize)]
 pub struct Key(pub String);
@@ -62,12 +62,12 @@ impl Key {
 }
 
 #[async_trait]
-impl FromRequestParts<Arc<Server>> for Key {
+impl FromRequestParts<Arc<Config>> for Key {
     type Rejection = (StatusCode, KeyError);
 
     async fn from_request_parts(
         parts: &mut Parts,
-        _state: &Arc<Server>,
+        _state: &Arc<Config>,
     ) -> Result<Self, Self::Rejection> {
         let header_name = HeaderName::from_static("lav-api-key");
         if let Some(value) = parts.headers.get(&header_name) {

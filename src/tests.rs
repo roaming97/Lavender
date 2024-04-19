@@ -26,8 +26,8 @@ fn test_base64_str(s: &str) -> bool {
 ///
 /// It returns a `TestResponse`.
 async fn test<Q: serde::Serialize>(route: &str, query: Q, key: Option<&str>) -> TestResponse {
-    let config = Server::new();
-    let state = Arc::<Server>::new(config);
+    let config = Config::new();
+    let state = Arc::<Config>::new(config);
 
     let lavender = lavender(state);
     let server = TestServer::new(lavender).unwrap();
