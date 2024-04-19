@@ -41,7 +41,7 @@ It is recommended to run the unit tests that are written for Lavender in [tests.
 ```rs
 #[tokio::test]
 async fn get_single_file() {
-    let query = GetFileParams { // <-- Looking at the type definition of `GetFileParams` can help. 
+    let query = GetFileParams { // <-- Looking at the definition of `GetFileParams` may help. 
         path: "./artwork/thumbnails/day1.webp".into(), // <-- Change this to your desired path.
     };
     let response = test("/file", query, TEST_API_KEY).await;
@@ -69,13 +69,13 @@ That password hashed using the SHA3_256 algorithm would be `4e655e82c64e3e1d0ba8
 
 This can be done either by exporting an environment variable with the value of the hash...
 
-### Unix
+**Unix**
 ```shell
 $ export LAVENDER_API_HASH="4e655e82c64e3e1d0ba853fa69fa599e6a3611fd26a6a977423e0f0c4d5fd542"
 $ echo $LAVENDER_API_HASH
 ```
 
-### Windows (PowerShell)
+**Windows (PowerShell)**
 ```powershell
 > $Env:LAVENDER_API_HASH = "4e655e82c64e3e1d0ba853fa69fa599e6a3611fd26a6a977423e0f0c4d5fd542"
 > $Env:LAVENDER_API_HASH
