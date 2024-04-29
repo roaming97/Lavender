@@ -21,13 +21,7 @@ pub async fn get_file(
 ) -> Result<Json<file::LavenderEntry>, StatusCode> {
     let path = Path::new(&query.path);
     let filepath = format!("{}/{}", &data.media_path, path.display());
-    file::LavenderEntry::new(filepath).map_or(Err(StatusCode::NOT_FOUND), |file| {
-        if file.is_valid() {
-            Ok(Json(file))
-        } else {
-            Err(StatusCode::BAD_REQUEST)
-        }
-    })
+    file::LavenderEntry::new(filepath).map_or(Err(StatusCode::BAD_REQUEST), |file| Ok(Json(file)))
 }
 
 pub async fn file_amount(State(data): State<Arc<Config>>, Key(_): Key) -> String {
@@ -38,19 +32,68 @@ pub async fn file_amount(State(data): State<Arc<Config>>, Key(_): Key) -> String
         .to_string()
 }
 
+#[derive(Serialize, Deserialize)]
+pub enum ReturnKind {
+    Entries,
+    Thumbnails,
+    Both,
+}
+
+impl Default for ReturnKind {
+    fn default() -> Self {
+        Self::Both
+    }
+}
+
 #[derive(Serialize, Deserialize, Default)]
 pub struct LatestFilesParams {
     pub count: Option<usize>,
     pub relpath: Option<String>,
     pub offset: Option<usize>,
-    pub thumbnail: bool,
+    pub kind: ReturnKind,
+}
+
+#[derive(Serialize, Deserialize, Default)]
+pub struct LatestFilesResponse {
+    pub entries: Option<Vec<file::LavenderEntry>>,
+    pub thumbnails: Option<Vec<file::LavenderEntry>>,
+}
+
+fn latest_entries(walk: &[walkdir::DirEntry]) -> Vec<file::LavenderEntry> {
+    walk.iter()
+        .map(|e| {
+            let path = e.path();
+            match file::LavenderEntry::new(path) {
+                Ok(f) => f,
+                Err(e) => panic!("Panicked while creating Lavender entry: {e:?}"),
+            }
+        })
+        .collect()
+}
+
+fn latest_thumbnails(walk: &[walkdir::DirEntry]) -> Vec<file::LavenderEntry> {
+    walk.iter()
+        .map(|e| {
+            let path = e.path();
+            let thumbnail_path = format!(
+                "{0}{1}thumbnails{1}{2}.webp",
+                path.parent().unwrap().display(),
+                std::path::MAIN_SEPARATOR,
+                path.file_stem().unwrap_or_default().to_string_lossy()
+            );
+            match file::LavenderEntry::new(thumbnail_path) {
+                Ok(f) => f,
+                Err(e) => panic!("Panicked while creating Lavender entry: {e:?}"),
+            }
+        })
+        .collect()
 }
 
 pub async fn get_latest_files(
     State(data): State<Arc<Config>>,
     Query(query): Query<LatestFilesParams>,
     Key(_): Key,
-) -> Result<Json<Vec<file::LavenderEntry>>, StatusCode> {
+) -> Result<Json<LatestFilesResponse>, StatusCode> {
     let count = query.count.unwrap_or(1);
     let path = format!(
         "{}{}{}",
@@ -60,13 +103,7 @@ pub async fn get_latest_files(
     );
     let mut walk: Vec<walkdir::DirEntry> = file::scan_fs(path, true)
         .into_iter()
-        .filter(|f| {
-            if query.thumbnail {
-                f.path().extension().unwrap_or_default().eq("webp")
-            } else {
-                true
-            }
-        })
+        .filter(|f| f.path().extension().unwrap_or_default().ne("webp"))
         .collect();
 
     if walk.is_empty() || query.offset.unwrap_or_default() >= walk.len() {
@@ -79,17 +116,16 @@ pub async fn get_latest_files(
         walk.truncate(count);
     }
 
-    let mut output = Vec::<file::LavenderEntry>::new();
+    let mut response = LatestFilesResponse::default();
 
-    for entry in walk {
-        // println!("{}", entry.path().display());
-        if let Ok(f) = file::LavenderEntry::new(entry.path()) {
-            if !f.is_valid() {
-                return Err(StatusCode::BAD_REQUEST);
-            }
-            output.push(f);
+    match query.kind {
+        ReturnKind::Entries => response.entries = Some(latest_entries(&walk)),
+        ReturnKind::Thumbnails => response.thumbnails = Some(latest_thumbnails(&walk)),
+        ReturnKind::Both => {
+            response.entries = Some(latest_entries(&walk));
+            response.thumbnails = Some(latest_thumbnails(&walk));
         }
     }
 
-    Ok(Json(output))
+    Ok(Json(response))
 }

@@ -17,13 +17,28 @@ pub struct LavenderEntry {
     date: SystemTime,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub enum LavenderEntryError {
+    BufferRead,
+    EmptyB64Data,
+    NoFilename,
+    UnsupportedMimetype,
+    CheckFailed,
+}
+
 impl LavenderEntry {
     /// Creates a new media file.
-    pub fn new<P: AsRef<Path>>(path: P) -> Result<Self> {
+    /// When creating it, checks that:
+    /// * The file's MIME type is supported.
+    /// * The file's base64 data is not empty.
+    /// * The file's has a name.
+    pub fn new<P: AsRef<Path>>(path: P) -> Result<Self, LavenderEntryError> {
         let path = path.as_ref().to_path_buf();
         let mimetype = infer::get_from_path(path.clone())
             .map_or(String::new(), |t| t.unwrap().mime_type().to_owned());
-        let buffer = fs::read(&path)?;
+        let Ok(buffer) = fs::read(&path) else {
+            return Err(LavenderEntryError::BufferRead);
+        };
         let b64 = GeneralPurpose::new(&alphabet::STANDARD, GeneralPurposeConfig::default())
             .encode(buffer);
         let filename = path
@@ -31,30 +46,28 @@ impl LavenderEntry {
             .unwrap_or_default()
             .to_string_lossy()
             .to_string();
-        let date = path.metadata()?.modified()?;
+        let date = path.metadata().unwrap().modified().unwrap();
 
-        Ok(Self {
-            path,
-            b64,
-            mimetype,
-            filename,
-            date,
-        })
+        if b64.is_empty() {
+            Err(LavenderEntryError::EmptyB64Data)
+        } else if filename.is_empty() {
+            Err(LavenderEntryError::NoFilename)
+        } else if !infer::is_mime_supported(&mimetype) {
+            Err(LavenderEntryError::UnsupportedMimetype)
+        } else {
+            Ok(Self {
+                path,
+                b64,
+                mimetype,
+                filename,
+                date,
+            })
+        }
     }
 
     #[cfg(test)]
     pub fn base64(&self) -> String {
         self.b64.clone()
-    }
-
-    /// Checks that:
-    /// * The file's MIME type is supported.
-    /// * The file's base64 data is not empty.
-    /// * The file's has a name.
-    pub fn is_valid(&self) -> bool {
-        infer::is_mime_supported(&self.mimetype)
-            && !self.b64.is_empty()
-            && !self.filename.is_empty()
     }
 }
 
