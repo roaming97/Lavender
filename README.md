@@ -91,4 +91,4 @@ $ cargo run --release
 
 ## Contributing
 
-This is meant to be a personal tool more than a standalone crate, it's not looking to be the most performant, just convenient for my use case. Pull requests will not be merged into this repository but feel free to fork it and make your own version!
+This is meant to be a personal tool more than a standalone crate, it doesn't strive to be the most performant, just convenient for my use case. Pull requests that modify the codebase substantially will likely not be merged into this repository but feel free to fork it and make your own version!
