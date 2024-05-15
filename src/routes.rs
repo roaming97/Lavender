@@ -41,7 +41,7 @@ pub enum ReturnKind {
 
 impl Default for ReturnKind {
     fn default() -> Self {
-        Self::Both
+        Self::Thumbnails
     }
 }
 
@@ -50,7 +50,7 @@ pub struct LatestFilesParams {
     pub count: Option<usize>,
     pub relpath: Option<String>,
     pub offset: Option<usize>,
-    pub kind: ReturnKind,
+    pub kind: Option<ReturnKind>,
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -118,7 +118,7 @@ pub async fn get_latest_files(
 
     let mut response = LatestFilesResponse::default();
 
-    match query.kind {
+    match query.kind.unwrap_or_default() {
         ReturnKind::Entries => response.entries = Some(latest_entries(&walk)),
         ReturnKind::Thumbnails => response.thumbnails = Some(latest_thumbnails(&walk)),
         ReturnKind::Both => {

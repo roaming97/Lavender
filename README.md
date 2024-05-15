@@ -44,9 +44,7 @@ async fn get_single_file() {
     let query = GetFileParams { // <-- Looking at the definition of `GetFileParams` may help. 
         path: "./artwork/thumbnails/day1.webp".into(), // <-- Change this to your desired path.
     };
-    let response = test("/file", query, TEST_API_KEY).await;
-
-    // rest of test code
+    let response = test("/file", query, TEST_API_KEY).await;    // rest of test code
 }
 ```
 

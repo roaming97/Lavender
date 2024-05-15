@@ -5,7 +5,7 @@ use crate::routes::*;
 
 use super::*;
 use axum_test::http::{HeaderName, HeaderValue};
-use axum_test::{TestResponse, TestServer};
+use axum_test::{TestRequest, TestServer};
 use base64::engine::{GeneralPurpose, GeneralPurposeConfig};
 use base64::{alphabet, Engine};
 use serde_json::json;
@@ -24,8 +24,10 @@ fn test_base64_str(s: &str) -> bool {
 
 /// Test a route.
 ///
-/// It returns a `TestResponse`.
-async fn test<Q: serde::Serialize>(route: &str, query: Q, key: Option<&str>) -> TestResponse {
+/// # Returns
+/// `TestRequest` so it can be awaited later.
+/// This ensures a safer way to send it between threads.
+fn test<Q: serde::Serialize>(route: &str, query: Q, key: Option<&str>) -> TestRequest {
     let config = Config::new();
     let state = Arc::<Config>::new(config);
 
@@ -37,15 +39,10 @@ async fn test<Q: serde::Serialize>(route: &str, query: Q, key: Option<&str>) -> 
         "0c508a046e5d93c3405af45332680a7aa3155f43858d009e106a6a4c67ed85c1",
     );
 
-    let response = server
-        .get(route)
-        .add_query_params(query)
-        .add_header(
-            HeaderName::from_static("lav-api-key"),
-            HeaderValue::from_str(key.unwrap_or_default()).unwrap(),
-        )
-        .await;
-    response
+    server.get(route).add_query_params(query).add_header(
+        HeaderName::from_static("lav-api-key"),
+        HeaderValue::from_str(key.unwrap_or_default()).unwrap(),
+    )
 }
 
 // * ROUTE TESTS
@@ -55,7 +52,7 @@ async fn test<Q: serde::Serialize>(route: &str, query: Q, key: Option<&str>) -> 
 #[tokio::test]
 async fn get_single_file() {
     let query = GetFileParams {
-        path: "./artwork/thumbnails/day1.webp".into(),
+        path: "./artwork/everydays/thumbnails/day1.webp".into(),
     };
     let response = test("/file", query, TEST_API_KEY).await;
     response.assert_status_ok();
@@ -77,7 +74,7 @@ async fn get_file_amount() {
 #[tokio::test]
 async fn latest_file_root_path() {
     let query = LatestFilesParams {
-        kind: ReturnKind::Entries,
+        kind: Some(ReturnKind::Entries),
         ..Default::default()
     };
     let response = test("/latest", query, TEST_API_KEY).await;
@@ -92,6 +89,7 @@ async fn multiple_latest_files_root_path() {
     let query = LatestFilesParams {
         relpath: Some("/artwork".into()),
         count: Some(3),
+        kind: Some(ReturnKind::Both),
         ..Default::default()
     };
     let response = test("/latest", query, TEST_API_KEY).await;
@@ -107,6 +105,7 @@ async fn multiple_latest_files_root_path() {
 async fn latest_image_root_path() {
     let query = LatestFilesParams {
         relpath: Some("/artwork".into()),
+        kind: Some(ReturnKind::Both),
         ..Default::default()
     };
     let response = test("/latest", query, TEST_API_KEY).await;
@@ -120,7 +119,6 @@ async fn latest_image_root_path() {
 async fn latest_thumbnail_root_path() {
     let query = LatestFilesParams {
         relpath: Some("/artwork".into()),
-        kind: ReturnKind::Thumbnails,
         ..Default::default()
     };
     let response = test("/latest", query, TEST_API_KEY).await;
@@ -137,7 +135,6 @@ async fn latest_thumbnails_root_path() {
     let query = LatestFilesParams {
         relpath: Some("/artwork".into()),
         count: Some(4),
-        kind: ReturnKind::Thumbnails,
         ..Default::default()
     };
     let response = test("/latest", query, TEST_API_KEY).await;
@@ -154,8 +151,8 @@ async fn latest_thumbnails_root_path_with_offset() {
     let query = LatestFilesParams {
         relpath: Some("/artwork".into()),
         count: Some(4),
-        kind: ReturnKind::Thumbnails,
         offset: Some(2),
+        ..Default::default()
     };
     let response = test("/latest", query, TEST_API_KEY).await;
     response.assert_status_ok();
@@ -170,6 +167,7 @@ async fn latest_thumbnails_root_path_with_offset() {
 async fn latest_video_root_path() {
     let query = LatestFilesParams {
         relpath: Some("/video".into()),
+        kind: Some(ReturnKind::Both),
         ..Default::default()
     };
     let response = test("/latest", query, TEST_API_KEY).await;
@@ -183,7 +181,6 @@ async fn latest_video_root_path() {
 async fn latest_video_thumbnail_root_path() {
     let query = LatestFilesParams {
         relpath: Some("/video".into()),
-        kind: ReturnKind::Thumbnails,
         ..Default::default()
     };
     let response = test("/latest", query, TEST_API_KEY).await;
@@ -197,7 +194,7 @@ async fn latest_video_thumbnail_root_path() {
 async fn latest_file_test_dir() {
     let query = LatestFilesParams {
         relpath: Some("/test_dir".into()),
-        kind: ReturnKind::Entries,
+        kind: Some(ReturnKind::Entries),
         ..Default::default()
     };
     let response = test("/latest", query, TEST_API_KEY).await;
@@ -212,7 +209,7 @@ async fn multiple_latest_files_test_dir() {
     let query = LatestFilesParams {
         count: Some(4),
         relpath: Some("/test_dir".into()),
-        kind: ReturnKind::Entries,
+        kind: Some(ReturnKind::Entries),
         ..Default::default()
     };
     let response = test("/latest", query, TEST_API_KEY).await;
@@ -273,7 +270,7 @@ async fn latest_zero_files() {
     let query = LatestFilesParams {
         // should default to 1
         count: Some(0),
-        kind: ReturnKind::Entries,
+        kind: Some(ReturnKind::Entries),
         ..Default::default()
     };
     let response = test("/latest", query, TEST_API_KEY).await;
