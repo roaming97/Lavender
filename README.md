@@ -1,6 +1,6 @@
 # Lavender
 
-The backend for my [website](https://roaming97.com/). It serves as a quick file server while being flexible and letting me automate tasks without having to hop back into the server or do too many manual fetch requests.
+Lavender is a quick file server while being flexible and letting me automate tasks without having to hop back into the server or do too many manual fetch requests. Originally used as the backend for my [website](https://roaming97.com/) before a server migration.
 
 Lavender is written 100% in **[Rust](https://www.rust-lang.org/)** using the [axum](https://github.com/tokio-rs/axum) web framework, which is very modular when handling data and writing tests (with additional help from [axum_test](https://github.com/JosephLenton/axum-test)).
 
